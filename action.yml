@@ -207,7 +207,7 @@ runs:
              download_and_extract "$OTHER_CLANG_URL" "clang" "$HOME/clang" "${{ inputs.other-clang-branch }}"
              [ ! -d $HOME/clang/bin/ ] && mv $HOME/clang/*/* $HOME/clang/
 
-             if ! ls "$HOME/clang/*-linux-*" &>/dev/null; then
+             if ! ls $HOME/clang/*-linux-* &>/dev/null; then
                  echo "Binutils not found in clang directory. Downloading AOSP GCC"
                  export NEED_GCC=1
              fi

@@ -383,7 +383,11 @@ runs:
          if [ -d "$HOME/clang/bin" ]; then
               CMD_PATH="$HOME/clang/bin"
               CMD_CC="clang"
-              if [ -d "$HOME/gcc-64/bin" ] || [ -d "$HOME/gcc-32/bin" ]; then
+              if [ -z "$NEED_GCC" ]; then
+                  CMD_CROSS_COMPILE="aarch64-linux-gnu-"
+                  CMD_CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
+                  CMD_CLANG_TRIPLE="aarch64-linux-gnu-"
+              elif [ -d "$HOME/gcc-64/bin" ] || [ -d "$HOME/gcc-32/bin" ]; then
                   CMD_CROSS_COMPILE="$HOME/gcc-64/bin/${GCC64}-"
                   CMD_CROSS_COMPILE_ARM32="$HOME/gcc-32/bin/${GCC32}-"
                   CMD_CLANG_TRIPLE="aarch64-linux-gnu-"

@@ -24,6 +24,10 @@ inputs:
     description: 'Enable CCache'
     required: false
     default: 'false'
+  ccache-stats:
+    description: 'Prints CCache Stats'
+    required: false
+    default: 'false'
   extra-cmd:
     description: 'Extra options of building kernel.'
     required: false
@@ -542,6 +546,10 @@ runs:
         unset CMD_PATH CMD_CC CMD_CLANG_TRIPLE CMD_CROSS_COMPILE CMD_CROSS_COMPILE_ARM32 USE_CCACHE CLANG_TRIPLE CROSS_COMPILE_ARM32 CROSS_COMPILE CLANG_PATH HOMES KVER COMMAND SWAP_FILE SUBLEVEL PATCHLEVEL VERSION GCC_DIR FILE FILE_NAME MATCHED_DIR FOLDER FOLDER_NAME GCC64 GCC32 NEED_GCC AOSP_CLANG_URL OTHER_CLANG_URL AOSP_GCC64_URL AOSP_GCC32_URL AOSP_GCC_BRANCH OTHER_GCC64_URL OTHER_GCC32_URL
         echo "::endgroup::"
 
+        if [ ${{ inputs.ccache-stats }} = true ]; then
+          echo "::notice:: Invoked CCACHE STATS"
+          ccache --show-stats -v
+        fi
 
         echo "::group:: Preparing Boot Image"
         if [ ${{ inputs.use-anykernel3 }} = true ]; then

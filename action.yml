@@ -207,7 +207,7 @@ runs:
               tar -C "$extract_dir" -xf "${output_name}.${url##*.}"
               ;;
             *)
-              git clone "$url" "$extract_dir" --depth=${{ inputs.depth }} -b "$branch"
+              git clone "$url" "$extract_dir" --depth=${{ inputs.clone-depth }} -b "$branch"
               ;;
           esac
         }
@@ -269,12 +269,12 @@ runs:
 
         # Setup Target Kernel
         echo "::group:: Fetching Kernel Source"
-        git clone --recursive ${{ inputs.kernel-url }} -b "${{ inputs.kernel-branch }}" --depth=${{ inputs.depth }} kernel/${{ inputs.kernel-dir }}
+        git clone --recursive ${{ inputs.kernel-url }} -b "${{ inputs.kernel-branch }}" --depth=${{ inputs.clone-depth }} kernel/${{ inputs.kernel-dir }}
         echo "::endgroup::"
 
         if [ -n ${{ inputs.vendor-url }} ]; then
           echo "::group:: Fetching Kernel Vendor Source"
-          git clone ${{ inputs.vendor-url }} --depth=${{ inputs.depth }} kernel/${{ inputs.vendor-dir }} -b ${{ inputs.vendor-branch }}
+          git clone ${{ inputs.vendor-url }} --depth=${{ inputs.clone-depth }} kernel/${{ inputs.vendor-dir }} -b ${{ inputs.vendor-branch }}
           test -d kernel/${{ inputs.vendor-dir }}/vendor && cp -rv kernel/${{ inputs.vendor-dir }}/vendor kernel
           test -d kernel/${{ inputs.vendor-dir }}/vendor && cp -rv kernel/${{ inputs.vendor-dir }}/vendor ./
           echo "::endgroup::"

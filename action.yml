@@ -24,64 +24,9 @@ inputs:
     description: 'Enable CCache'
     required: false
     default: 'false'
-  defconfig:
-    description: 'Configuration file for building android kernel'
-    required: true
-    default: defconfig
-  arch:
-    description: 'Target device architecture.'
-    required: true
-    default: arm64
   extra-cmd:
     description: 'Extra options of building kernel.'
     required: false
-# Extra Patch Features
-  use-patch:
-    description: 'Enable Patching'
-    required: false
-    default: 'false'
-  lxc:
-    description: 'Enable lxc and docker configs for configs.'
-    required: false
-    default: 'false'
-  lxc-patch:
-    description: 'Apply lxc patch aviod not booting'
-    required: false
-    default: 'false'
-  kvm:
-    description: 'Enable KVM for configs.'
-    required: false
-    default: 'false'
-  disable-lto:
-    description: 'Disable LTO configs for configs.'
-    required: false
-    default: 'false'
-  nethunter-patch:
-    description: 'Enables Nethunter Patch'
-    required: false
-    default: 'false'
-# Kernel Config
-  kernel-url:
-    description: 'Kernel Source Url'
-    required: true
-  kernel-branch:
-    description: 'Branch name for kernel source'
-    required: false
-  kernel-vendor-url:
-    description: 'Kernel Vendor Source Url'
-    required: false
-  kernel-vendor-branch:
-    description: 'Branch name for vendor kernel source'
-    required: false
-    default: ''
-  kernel-dir:
-    description: 'Custom name of the kernel directory to be genarated during build.'
-    required: false
-    default: kernel
-  kernel-vendor-dir:
-    description: 'Custom name of the vendor directory to be genarated during build.'
-    required: false
-    default: vendor
 # Build Config - CLANG
 #
 # note: - aosp-clang takes precedence over other-clang-url
@@ -134,6 +79,61 @@ inputs:
     description: "branch name if its a git repository"
     required: false
     default: ""
+# Kernel Config
+  defconfig:
+    description: 'Configuration file for building android kernel'
+    required: true
+    default: defconfig
+  arch:
+    description: 'Target device architecture.'
+    required: true
+    default: arm64
+  kernel-url:
+    description: 'Kernel Source Url'
+    required: true
+  kernel-branch:
+    description: 'Branch name for kernel source'
+    required: false
+  kernel-vendor-url:
+    description: 'Kernel Vendor Source Url'
+    required: false
+  kernel-vendor-branch:
+    description: 'Branch name for vendor kernel source'
+    required: false
+    default: ''
+  kernel-dir:
+    description: 'Custom name of the kernel directory to be genarated during build.'
+    required: false
+    default: kernel
+  kernel-vendor-dir:
+    description: 'Custom name of the vendor directory to be genarated during build.'
+    required: false
+    default: vendor
+# Extra Patch Features
+  use-patch:
+    description: 'Enable Patching'
+    required: false
+    default: 'false'
+  lxc:
+    description: 'Enable lxc and docker configs for configs.'
+    required: false
+    default: 'false'
+  lxc-patch:
+    description: 'Apply lxc patch aviod not booting'
+    required: false
+    default: 'false'
+  kvm:
+    description: 'Enable KVM for configs.'
+    required: false
+    default: 'false'
+  disable-lto:
+    description: 'Disable LTO configs for configs.'
+    required: false
+    default: 'false'
+  nethunter-patch:
+    description: 'Enables Nethunter Patch'
+    required: false
+    default: 'false'
 # Kernel SU Support & Others
 #
 # note: - if ksu-url is not defined script will use the original KSU repo
@@ -528,6 +528,7 @@ runs:
         fi
 
         echo "::group:: Building Kernel"
+        echo "::notice::starting.. ${COMMAND}"
         mkdir out -p -v
         # run the command
         ${COMMAND}

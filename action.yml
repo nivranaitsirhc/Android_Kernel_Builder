@@ -172,11 +172,12 @@ runs:
   using: 'composite'
   steps:
     - name: Setup ccache
-      if: inputs.ccache == 'true'
-      uses: hendrikmuhs/ccache-action@v1.2
+      if: inputs.use-ccache == 'true'
+      uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ inputs.defconfig }}-0cb68f9cbcbb3de9c966cf66ed51471fbe51419e
         max-size: 4G
+        verbose: 1
         create-symlink: true
 
     - name: Build Kernel
@@ -310,7 +311,7 @@ runs:
         fi
 
         # Pre-Build Setup
-        echo "::group::Pre-Build Setup"
+        echo "::group:: Pre-Build Setup"
 
         # initial command
         COMMAND="make -j$(nproc --all) ${{ inputs.defconfig }} ARCH=${{ inputs.arch }} all ${{ inputs.extra-cmd }} O=out"
@@ -364,7 +365,7 @@ runs:
           echo "::notice::CCACHE is enabled!"
           export USE_CCACHE=1
           #export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          echo "Listing CCACHE -> $(ls /usr/lib/ccache)"
+          #echo "Listing CCACHE -> $(ls /usr/lib/ccache)"
 
           # ensure /usr/lib/ccache is first inside CMD_PATH
           CMD_PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:${CMD_PATH}"

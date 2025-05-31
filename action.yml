@@ -10,36 +10,20 @@ inputs:
   clone-depth:
     description: 'Max-depth when cloning Sources'
     required: false
-    default: "1"
+    default: '1'
   release:
-    description: "After the kernel compilation is completed, it will be automatically published to the releases page"
+    description: 'After the kernel compilation is completed, it will be automatically published to the releases page'
     required: false
-    default: "false"
+    default: 'false'
   release-name:
-    description: "Custom release name of package kernel"
+    description: 'Custom release name of package kernel'
     required: false
-    default: "Anykernel3-Flasher"
-# Kernel Config
-  kernel-url:
-    description: 'Kernel Source Url'
-    required: true
-  kernel-branch:
-    description: 'Branch name for kernel source'
+    default: 'Anykernel3-Flasher'
+# Build Config
+  use-ccache:
+    description: 'Enable CCache'
     required: false
-  vendor-url:
-    description: 'Kernel Vendor Source Url'
-    required: false
-  vendor-branch:
-    description: 'Branch name for vendor kernel source'
-    required: false
-  kernel-dir:
-    description: 'Custom name of the kernel directory to be genarated during build.'
-    required: false
-    default: kernel
-  vendor-dir:
-    description: 'Custom name of the vendor directory to be genarated during build.'
-    required: false
-    default: vendor
+    default: 'false'
   defconfig:
     description: 'Configuration file for building android kernel'
     required: true
@@ -48,18 +32,64 @@ inputs:
     description: 'Target device architecture.'
     required: true
     default: arm64
-# Build Config
-  ccache:
-    description: 'Enable Ccache for compiling kernel'
-    required: false
-    default: "false"
   extra-cmd:
     description: 'Extra options of building kernel.'
     required: false
+# Extra Patch Features
+  use-patch:
+    description: 'Enable Patching'
+    required: false
+    default: 'false'
+  lxc:
+    description: 'Enable lxc and docker configs for configs.'
+    required: false
+    default: 'false'
+  lxc-patch:
+    description: 'Apply lxc patch aviod not booting'
+    required: false
+    default: 'false'
+  kvm:
+    description: 'Enable KVM for configs.'
+    required: false
+    default: 'false'
+  disable-lto:
+    description: 'Disable LTO configs for configs.'
+    required: false
+    default: 'false'
+  nethunter-patch:
+    description: 'Enables Nethunter Patch'
+    required: false
+    default: 'false'
+# Kernel Config
+  kernel-url:
+    description: 'Kernel Source Url'
+    required: true
+  kernel-branch:
+    description: 'Branch name for kernel source'
+    required: false
+  kernel-vendor-url:
+    description: 'Kernel Vendor Source Url'
+    required: false
+  kernel-vendor-branch:
+    description: 'Branch name for vendor kernel source'
+    required: false
+    default: ''
+  kernel-dir:
+    description: 'Custom name of the kernel directory to be genarated during build.'
+    required: false
+    default: kernel
+  kernel-vendor-dir:
+    description: 'Custom name of the vendor directory to be genarated during build.'
+    required: false
+    default: vendor
 # Build Config - CLANG
 #
 # note: - aosp-clang takes precedence over other-clang-url
 #       - change aosp-clang-version required by your build
+  use-clang:
+    description: 'Enable Clang'
+    required: false
+    default: 'false'
   aosp-clang:
     description: 'Use clang from aosp project.'
     required: false
@@ -82,6 +112,8 @@ inputs:
 # Build Config - GCC
 # 
 # note: - Some third-party clang has bundled GCC.
+  use-gcc:
+    description: 'Enable GCC'
   aosp-gcc:
     description: 'Use gcc from the aosp project.'
     required: false
@@ -104,11 +136,11 @@ inputs:
     default: ""
 # Kernel SU Support & Others
 #
-# note: - if ksu-url is not defined script will use the original tian
-  ksu:
+# note: - if ksu-url is not defined script will use the original KSU repo
+  use-ksu:
     description: 'KernelSU function support'
     required: false
-    default: false
+    default: 'false'
   ksu-version:
     description: 'KernelSU default branch'
     required: false
@@ -116,35 +148,16 @@ inputs:
   ksu-url:
     description: 'Using third party KernelSU instead of official KernelSU'
     required: false
+    default: ''
   ksu-lkm:
     description: 'Build KernelSU as a loadable kernel module'
     required: false
-    default: false
-  disable-lto:
-    description: 'Disable LTO configs for configs.'
-    required: false
-    default: false
-  lxc:
-    description: 'Enable lxc and docker configs for configs.'
-    required: false
-    default: false
-  lxc-patch:
-    description: 'Apply lxc patch aviod not booting'
-    required: false
-    default: false
-  nethunter-patch:
-    description: 'Enables Nethunter Patch'
-    required: false
-    default: false
-  kvm:
-    description: 'Enable KVM for configs.'
-    required: false
-    default: false
+    default: 'false'
 # Extras
-  anykernel3:
+  use-anykernel3:
     description: 'Package kernel use anykernel3.'
     required: false
-    default: false
+    default: 'false'
   anykernel3-url:
     description: 'third-party anykernrl3 url path'
     required: false
@@ -158,7 +171,6 @@ inputs:
 runs:
   using: 'composite'
   steps:
-
     - name: Setup ccache
       if: inputs.ccache == 'true'
       uses: hendrikmuhs/ccache-action@v1.2
@@ -169,7 +181,7 @@ runs:
 
     - name: Build Kernel
       shell: bash
-      run: |   
+      run: |
         #!/bin/bash
         #
         if [[ ${GITHUB_ACTIONS} != "true" || ${OSTYPE} != "linux-gnu" || ! -f /bin/apt ]]; then
@@ -177,6 +189,8 @@ runs:
           exit 127
         fi
 
+        # Setup Functions
+        # sudo wrapper
         SU() {
           if [ "$(id -u)" -eq 0 ]; then
             "$@"
@@ -184,12 +198,6 @@ runs:
             sudo "$@"
           fi
         }
-
-        echo "::group:: Installing building dependency packages"
-        "SU" apt-get update
-        "SU" apt-get install --no-install-recommends -y binutils git make bc bison openssl curl zip kmod cpio flex libelf-dev libssl-dev libtfm-dev libc6-dev device-tree-compiler ca-certificates python3 xz-utils libc6-dev aria2 build-essential ccache pigz coccinelle parallel
-        echo "::endgroup::"
-
         # download and extract files supports zip,tar,gz,xz,bz2,git
         download_and_extract() {
           local url=$1
@@ -211,76 +219,78 @@ runs:
               ;;
           esac
         }
+        #
+        function version_gt() { test "$(echo -e "$1\n$2" | sort -V | tail -n1)" == "$1"; }
+
+
+        # Setup Build Dependencies
+        echo "::group:: Installing building dependency packages"
+        "SU" apt-get update
+        "SU" apt-get install --no-install-recommends -y binutils git make bc bison openssl curl zip kmod cpio flex libelf-dev libssl-dev libtfm-dev libc6-dev device-tree-compiler ca-certificates python3 xz-utils libc6-dev aria2 build-essential ccache pigz coccinelle parallel
+        echo "::endgroup::"
 
         # Setup CLANG
-        echo "::group:: Setting CLANG"
-        if [ ${{ inputs.aosp-clang }} = true ]; then
-          echo "::notice:: Using AOSP clang"
-          if [ ! -z ${{ inputs.android-version }} ]; then
-            export AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android${{ inputs.android-version }}-release/clang-${{ inputs.aosp-clang-version }}.tar.gz"
-          else
-            export AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/mirror-goog-main-llvm-toolchain-source/clang-${{ inputs.aosp-clang-version }}.tar.gz"
-          fi
-          download_and_extract "$AOSP_CLANG_URL" "aosp-clang" "$HOME/clang"
-          # need GCC when using aosp-clang
-          export NEED_GCC=1
-        elif [ ! -z ${{ inputs.other-clang-url }} ]; then
-          echo "::notice:: Using third-party clang"
-          export OTHER_CLANG_URL=${{ inputs.other-clang-url }}
-          download_and_extract "$OTHER_CLANG_URL" "clang" "$HOME/clang" "${{ inputs.other-clang-branch }}"
-          [ ! -d $HOME/clang/bin/ ] && mv $HOME/clang/*/* $HOME/clang/
-
-          if ! ls $HOME/clang/*-linux-* &>/dev/null; then
-            echo "::notice:: Binutils not found in clang directory. Downloading AOSP GCC"
+        if [ ${{ inputs.use-clang }} = true ]; then
+          echo "::group:: Setting CLANG"
+          if [ ${{ inputs.aosp-clang }} = true ]; then
+            echo "::notice:: Using AOSP clang"
+            if [ ! -z ${{ inputs.android-version }} ]; then
+              export AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android${{ inputs.android-version }}-release/clang-${{ inputs.aosp-clang-version }}.tar.gz"
+            else
+              export AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/mirror-goog-main-llvm-toolchain-source/clang-${{ inputs.aosp-clang-version }}.tar.gz"
+            fi
+            download_and_extract "$AOSP_CLANG_URL" "aosp-clang" "$HOME/clang"
+            # need GCC when using aosp-clang
             export NEED_GCC=1
-          fi
-        else
-          "SU" apt install clang lld binutils-aarch64-linux-gnu binutils-arm-linux-gnuabeihf -y
-        fi
-        echo "::endgroup::"
+          elif [ ! -z ${{ inputs.other-clang-url }} ]; then
+            echo "::notice:: Using third-party clang"
+            export OTHER_CLANG_URL=${{ inputs.other-clang-url }}
+            download_and_extract "$OTHER_CLANG_URL" "clang" "$HOME/clang" "${{ inputs.other-clang-branch }}"
 
-        # Setup GCC
-        echo "::group:: Setting GCC"
-        if [ ${{ inputs.aosp-gcc }} = true ] || [ ! -z "$NEED_GCC" ]; then
-          echo "::notice:: Downloading AOSP GCC."
-          if [ ! -z ${{ inputs.android-version }} ]; then
-            export AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9"
-            export AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9"
-            export AOSP_GCC_BRANCH="android${{ inputs.android-version }}-release"
+            [ ! -d $HOME/clang/bin/ ] && mv $HOME/clang/*/* $HOME/clang/ # move all files under clang/*/* to clang
+
+            if ! ls $HOME/clang/*-linux-* &>/dev/null; then
+              echo "::notice:: Binutils not found in clang directory. Downloading AOSP GCC"
+              export NEED_GCC=1
+            fi
           else
-            export AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz"
-            export AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz"
+            # use clang from repo
+            "SU" apt install clang lld binutils-aarch64-linux-gnu binutils-arm-linux-gnuabeihf -y
           fi
-          download_and_extract "$AOSP_GCC64_URL" "gcc-aarch64" "$HOME/gcc-64" "$AOSP_GCC_BRANCH"
-          download_and_extract "$AOSP_GCC32_URL" "gcc-arm" "$HOME/gcc-32" "$AOSP_GCC_BRANCH"
-        elif [ ! -z ${{ inputs.other-gcc64-url }} ] || [ ! -z ${{ inputs.other-gcc32-url }} ]; then
-          echo "::notice:: Downloading third-party GCC."
-          export OTHER_GCC64_URL=${{ inputs.other-gcc64-url }}
-          export OTHER_GCC32_URL=${{ inputs.other-gcc32-url }}
-          download_and_extract "$OTHER_GCC64_URL" "gcc-aarch64" "$HOME/gcc-64" "${{ inputs.other-gcc64-branch }}"
-          download_and_extract "$OTHER_GCC32_URL" "gcc-arm" "$HOME/gcc-32" "${{ inputs.other-gcc32-branch }}"
-        fi
-
-        if [ -d $HOME/gcc-64 ] || [ -d $HOME/gcc-32 ]; then
-          [ ! -d $HOME/gcc-64/bin/ ] && mv $HOME/gcc-64/*/* $HOME/gcc-64/
-          [ ! -d $HOME/gcc-32/bin/ ] && mv $HOME/gcc-32/*/* $HOME/gcc-32/
-        fi
-        echo "::endgroup::"
-
-        # Setup Target Kernel
-        echo "::group:: Fetching Kernel Source"
-        git clone --recursive ${{ inputs.kernel-url }} -b "${{ inputs.kernel-branch }}" --depth=${{ inputs.clone-depth }} kernel/${{ inputs.kernel-dir }}
-        echo "::endgroup::"
-
-        if [ -n ${{ inputs.vendor-url }} ]; then
-          echo "::group:: Fetching Kernel Vendor Source"
-          git clone ${{ inputs.vendor-url }} --depth=${{ inputs.clone-depth }} kernel/${{ inputs.vendor-dir }} -b ${{ inputs.vendor-branch }}
-          test -d kernel/${{ inputs.vendor-dir }}/vendor && cp -rv kernel/${{ inputs.vendor-dir }}/vendor kernel
-          test -d kernel/${{ inputs.vendor-dir }}/vendor && cp -rv kernel/${{ inputs.vendor-dir }}/vendor ./
           echo "::endgroup::"
         fi
 
-        cd kernel/${{ inputs.kernel-dir }}
+        # Setup GCC
+        if [ ${{ inputs.use-gcc }} = true ] || [ -n "$NEED_GCC" ]; then
+          echo "::group:: Setting GCC"
+          if [ ${{ inputs.aosp-gcc }} = true ] || [ -n "$NEED_GCC" ]; then
+            echo "::notice:: Downloading AOSP GCC."
+            if [ ! -z ${{ inputs.android-version }} ]; then
+              export AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9"
+              export AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9"
+              export AOSP_GCC_BRANCH="android${{ inputs.android-version }}-release"
+            else
+              export AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz"
+              export AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz"
+            fi
+            download_and_extract "$AOSP_GCC64_URL" "gcc-aarch64" "$HOME/gcc-64" "$AOSP_GCC_BRANCH"
+            download_and_extract "$AOSP_GCC32_URL" "gcc-arm" "$HOME/gcc-32" "$AOSP_GCC_BRANCH"
+          elif [ -n ${{ inputs.other-gcc64-url }} ] || [ -n ${{ inputs.other-gcc32-url }} ]; then
+            echo "::notice:: Downloading third-party GCC."
+            export OTHER_GCC64_URL=${{ inputs.other-gcc64-url }}
+            export OTHER_GCC32_URL=${{ inputs.other-gcc32-url }}
+            download_and_extract "$OTHER_GCC64_URL" "gcc-aarch64" "$HOME/gcc-64" "${{ inputs.other-gcc64-branch }}"
+            download_and_extract "$OTHER_GCC32_URL" "gcc-arm" "$HOME/gcc-32" "${{ inputs.other-gcc32-branch }}"
+          fi
+
+          if [ -d $HOME/gcc-64 ] || [ -d $HOME/gcc-32 ]; then
+            [ ! -d $HOME/gcc-64/bin/ ] && mv $HOME/gcc-64/*/* $HOME/gcc-64/
+            [ ! -d $HOME/gcc-32/bin/ ] && mv $HOME/gcc-32/*/* $HOME/gcc-32/
+          fi
+          echo "::endgroup::"
+        fi
+
+        # GCC post-Setup
         if [ -d $HOME/gcc-64/bin/ ] || [ -d $HOME/gcc-32/bin/ ]; then
           for GCC_DIR in "$HOME/gcc-64" "$HOME/gcc-32"; do
             find "$GCC_DIR"/*/*/bin -type d -exec sh -c 'mv "$(dirname "{}")"/* "$GCC_DIR"/' _ {} \; -quit >/dev/null 2>&1 || true
@@ -299,20 +309,120 @@ runs:
           done
         fi
 
-        function version_gt() { test "$(echo -e "$1\n$2" | sort -V | tail -n1)" == "$1"; }
+        # Pre-Build Setup
+        echo "::group::Pre-Build Setup"
+
+        # initial command
+        COMMAND="make -j$(nproc --all) ${{ inputs.defconfig }} ARCH=${{ inputs.arch }} all ${{ inputs.extra-cmd }} O=out"
+
+        # setup makefile var
+        if [ ${{ inputs.use-clang }} = true ]; then
+          if [ -d "$HOME/clang/bin" ]; then
+            echo "::notice::Using \$HOME/clang/bin/clang"
+            # use clang
+            CMD_PATH="$HOME/clang/bin"
+            CMD_CC="clang"
+            CMD_CLANG_TRIPLE="aarch64-linux-gnu-"
+            if [ -z "$NEED_GCC" ]; then
+              CMD_CROSS_COMPILE="aarch64-linux-gnu-"
+              CMD_CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
+            else
+              if [ -d "$HOME/gcc-64/bin" ] || [ -d "$HOME/gcc-32/bin" ]; then
+                echo "::notice::Using \$HOME/gcc-{64/32}/bin"
+                CMD_CROSS_COMPILE="$HOME/gcc-64/bin/${GCC64}-"
+                CMD_CROSS_COMPILE_ARM32="$HOME/gcc-32/bin/${GCC32}-"
+              else
+                echo "::error::Unable to setup cross-compile bins"
+              fi
+            fi
+          elif [ -d "/usr/bin/clang" ]; then
+            echo "::notice::Using /usr/bin/clang"
+            CMD_CC="/usr/bin/clang"
+            CMD_CROSS_COMPILE="/usr/bin/aarch64-linux-gnu-"
+            CMD_CROSS_COMPILE_ARM32="arm-linux-gnuabeihf-"
+            CMD_CLANG_TRIPLE="aarch64-linux-gnu-"
+          else
+            echo "::error::CCLANG is explicitly required but was not found."
+          fi
+        elif [ ${{ inputs.use-gcc }} = true ]; then
+          if [ -d "$HOME/gcc-64/bin" ] || [ -d "$HOME/gcc-32/bin" ]; then
+            CMD_PATH="$HOME/gcc-64/bin:$HOME/gcc-32/bin"
+            if [ -n "${GCC64}" ]; then
+                CMD_CC="$HOME/gcc-64/bin/${GCC64}-gcc"
+            else
+                CMD_CC="$HOME/gcc-32/bin/${GCC32}-gcc"
+            fi
+            CMD_CROSS_COMPILE="${GCC64}-"
+            CMD_CROSS_COMPILE_ARM32="${GCC32}-"
+            CMD_CLANG_TRIPLE="aarch64-linux-gnu-"
+          else
+            echo "::error::GCC is explicitly required but was not found."
+          fi
+        fi
+
+        if [ ${{ inputs.use-ccache }} = true ]; then
+            # enable ccache
+            export USE_CCACHE=1
+            export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+
+            # ensure /usr/lib/ccache is first inside CMD_PATH
+            test -f /usr/bin/ccache && $SU rm -v /usr/bin/ccache
+            CMD_PATH="/usr/lib/ccache:${CMD_PATH}"
+
+            # verify compiler exist in /usr/lib/ccache
+            if [ -d "${HOME}/clang/bin" ]; then
+                [ ! -e /usr/lib/clang ] && \
+                    ln -s /usr/lib/clang /usr/bin/ccache
+            else
+                if [ -n "${GCC64}" ]; then
+                    [ ! -e "/usr/lib/${GCC64}-gcc" ] && \
+                        ln -s "/usr/lib/${GCC64}-gcc" /usr/bin/ccache
+                else
+                    [ ! -e "/usr/lib/${GCC32}-gcc" ] && \
+                        ln -s "/usr/lib/${GCC32}-gcc" /usr/bin/ccache
+                fi
+            fi
+        fi
+
+        # setup additional commands
+        COMMAND+=" PATH=${CMD_PATH}:${PATH} CROSS_COMPILE=${CMD_CROSS_COMPILE} CROSS_COMPILE_ARM32=${CMD_CROSS_COMPILE_ARM32} CLANG_TRIPLE=${CMD_CLANG_TRIPLE} CC=${CMD_CC}"
+
+        echo "::endgroup::"
+
+
+        # Setup Target Kernel
+        echo "::group:: Fetching Kernel Source"
+        echo "::notice:: Downloading Kernel Source"
+        git clone --recursive ${{ inputs.kernel-url }} -b "${{ inputs.kernel-branch }}" --depth=${{ inputs.clone-depth }} kernel/${{ inputs.kernel-dir }}
+
+        if [ -n ${{ inputs.kernel-vendor-url }} ]; then
+          echo "::notice:: Downloading Kernel Vendor Source"
+          if [ -n ${{ inputs.kernel-vendor-branch }} ];then
+            git clone ${{ inputs.kernel-vendor-url }} --depth=${{ inputs.clone-depth }} kernel/${{ inputs.kernel-vendor-dir }} -b ${{ inputs.kernel-vendor-branch }}
+          else
+            git clone ${{ inputs.kernel-vendor-url }} --depth=${{ inputs.clone-depth }} kernel/${{ inputs.kernel-vendor-dir }}
+          fi
+          test -d kernel/${{ inputs.kernel-vendor-dir }}/vendor && cp -rv kernel/${{ inputs.kernel-vendor-dir }}/vendor kernel
+          test -d kernel/${{ inputs.kernel-vendor-dir }}/vendor && cp -rv kernel/${{ inputs.kernel-vendor-dir }}/vendor ./
+
+        fi
+        echo "::endgroup::"
+
+        # Move to Kernel dir
+        cd kernel/${{ inputs.kernel-dir }}
 
         # Evaluate target Kernel for GKI/NON-GKI support
         VERSION=$(grep -E '^VERSION = ' Makefile | awk '{print $3}')
         PATCHLEVEL=$(grep -E '^PATCHLEVEL = ' Makefile | awk '{print $3}')
         SUBLEVEL=$(grep -E '^SUBLEVEL = ' Makefile | awk '{print $3}')
         if [ "$VERSION" -lt 5 ]; then
-          touch nongki.txt
+        xq  touch nongki.txt
         elif [ "$PATCHLEVEL" -lt 10 ]; then
           echo false > nongki.txt
         fi
 
         # Setup Kernel SU
-        if [ ${{ inputs.ksu }} = true ]; then
+        if [ ${{ inputs.use-ksu }} = true ]; then
           echo "::group:: Initializing KernelSU"
           if [ -f KernelSU/kernel/Kconfig ]; then
               echo "::notice::KernelSU has already been initialized!"
@@ -347,6 +457,7 @@ runs:
           echo "::endgroup::"
         fi
 
+        # Use mkdtboimg Py3
         if [ -f scripts/dtc/libfdt/mkdtboimg.py ]; then
           if grep python2 scripts/Makefile.lib >/dev/null; then
             echo "::group:: Using mkdtboimg Python3 version instead of Python2 version"
@@ -363,114 +474,61 @@ runs:
         fi
         echo "::endgroup::"
 
-        if [ ${{ inputs.nethunter }} = true ]; then
-          echo "::group:: Initializing Kali nethunter"
-          aria2c https://github.com/dabao1955/kernel_build_action/raw/main/nethunter/config.sh -o nconfig.sh &&  bash nconfig.sh arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }} -w
-          if [ ${{ inputs.nethunter-patch }} = true ]; then
-            aria2c https://github.com/dabao1955/kernel_build_action/raw/main/nethunter/add-wifi-injection.patch && git apply add-wifi-injection.patch
-            aria2c https://github.com/dabao1955/kernel_build_action/raw/main/nethunter/fix-ath9k-naming-conflict.patch && git apply fix-ath9k-naming-conflict.patch
-            if [ "$PATCHLEVEL" -lt "19" ]; then
-                aria2c https://github.com/dabao1955/kernel_build_action/raw/main/nethunter/add-wifi-injection-4.14.patch && git apply add-wifi-injection-4.14.patch
+        if [ ${{ inputs.use-patch }} = true ]; then
+          echo "::notice:: Patching is Enabled!"
+          
+          # Kalihunter Injection
+          if [ ${{ inputs.nethunter }} = true ]; then
+            echo "::notice::Injecting Kalihunter"
+            aria2c https://github.com/dabao1955/kernel_build_action/raw/main/nethunter/config.sh -o nconfig.sh &&  bash nconfig.sh arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }} -w
+            if [ ${{ inputs.nethunter-patch }} = true ]; then
+              aria2c https://github.com/dabao1955/kernel_build_action/raw/main/nethunter/add-wifi-injection.patch && git apply add-wifi-injection.patch
+              aria2c https://github.com/dabao1955/kernel_build_action/raw/main/nethunter/fix-ath9k-naming-conflict.patch && git apply fix-ath9k-naming-conflict.patch
+              if [ "$PATCHLEVEL" -lt "19" ]; then
+                  aria2c https://github.com/dabao1955/kernel_build_action/raw/main/nethunter/add-wifi-injection-4.14.patch && git apply add-wifi-injection-4.14.patch
+              fi
+            else
+              echo "::notice::Skipping NETHUNTER injection.."
             fi
-          else
-            echo "skip patch"
+          fi
+
+          # Disable LTO in config
+          if [ ${{ inputs.disable-lto }} = true ]; then
+            if grep -q "LTO" "arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }}"; then
+              echo "::notice::Disabling LTO"
+              sed -i 's/CONFIG_LTO=y/CONFIG_LTO=n/' arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }}
+              sed -i 's/CONFIG_LTO_CLANG=y/CONFIG_LTO_CLANG=n/' arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }}
+              sed -i 's/CONFIG_THINLTO=y/CONFIG_THINLTO=n/' arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }}
+              echo "CONFIG_LTO_NONE=y" | tee -a arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }} >/dev/null
+            else
+              echo "::notice::Skipping LTO patching.."
+            fi
+          fi
+
+          # Enable KVM in config
+          if [ ${{ inputs.kvm }} = true ]; then
+            echo "::notice::Enabling KVM"
+            echo "CONFIG_VIRTUALIZATION=y" | tee -a arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }} >/dev/null
+            echo "CONFIG_KVM=y" | tee -a arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }} >/dev/null
+            echo "CONFIG_KVM_MMIO=y" | tee -a arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }} >/dev/null
+            echo "CONFIG_KVM_ARM_HOST=y" | tee -a arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }} >/dev/null
+          fi
+
+          # Enable LXC in config
+          if [ ${{ inputs.lxc }} = true ]; then
+            echo "::notice::Enabling LXC"
+            aria2c https://github.com/dabao1955/kernel_build_action/raw/main/lxc/config.sh && bash config.sh arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }} -w
+            if [ ${{ inputs.lxc-patch }} = true ]; then
+              curl -SsL https://github.com/dabao1955/kernel_build_action/raw/main/lxc/patch.sh | bash
+            else
+              echo "::notice::Skip LXC patching..... "
+            fi
           fi
           echo "::endgroup::"
         fi
-
-        if [ ${{ inputs.disable-lto }} = true ]; then
-          if grep -q "LTO" "arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }}"
-          then
-            sed -i 's/CONFIG_LTO=y/CONFIG_LTO=n/' arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }}
-            sed -i 's/CONFIG_LTO_CLANG=y/CONFIG_LTO_CLANG=n/' arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }}
-            sed -i 's/CONFIG_THINLTO=y/CONFIG_THINLTO=n/' arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }}
-            echo "CONFIG_LTO_NONE=y" | tee -a arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }} >/dev/null
-          fi
-        fi
-
-        if [ ${{ inputs.kvm }} = true ]; then
-          echo "CONFIG_VIRTUALIZATION=y" | tee -a arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }} >/dev/null
-          echo "CONFIG_KVM=y" | tee -a arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }} >/dev/null
-          echo "CONFIG_KVM_MMIO=y" | tee -a arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }} >/dev/null
-          echo "CONFIG_KVM_ARM_HOST=y" | tee -a arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }} >/dev/null
-        fi
-
-        if [ ${{ inputs.lxc }} = true ]; then
-          echo "::group:: Enabling LXC"
-          aria2c https://github.com/dabao1955/kernel_build_action/raw/main/lxc/config.sh && bash config.sh arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }} -w
-          if [ ${{ inputs.lxc-patch }} = true ]; then
-            curl -SsL https://github.com/dabao1955/kernel_build_action/raw/main/lxc/patch.sh | bash
-          else
-            echo "Skip LXC patching..... "
-          fi
-          echo "::endgroup::"
-        fi
-
 
         echo "::group:: Building Kernel"
         mkdir out -p -v
-        COMMAND="make -j$(nproc --all) ${{ inputs.defconfig }} ARCH=${{ inputs.arch }} all ${{ inputs.extra-cmd }} O=out"
-
-        if [ -d "$HOME/clang/bin" ]; then
-          CMD_PATH="$HOME/clang/bin"
-          CMD_CC="clang"
-          if [ -z "$NEED_GCC" ]; then
-            CMD_CROSS_COMPILE="aarch64-linux-gnu-"
-            CMD_CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
-            CMD_CLANG_TRIPLE="aarch64-linux-gnu-"
-          else
-            if [ -d "$HOME/gcc-64/bin" ] || [ -d "$HOME/gcc-32/bin" ]; then
-              CMD_CROSS_COMPILE="$HOME/gcc-64/bin/${GCC64}-"
-              CMD_CROSS_COMPILE_ARM32="$HOME/gcc-32/bin/${GCC32}-"
-              CMD_CLANG_TRIPLE="aarch64-linux-gnu-"
-            else
-              echo "::error:: unable to setup cross-compile bins"
-            fi
-          fi
-        elif [ -d "$HOME/gcc-64/bin" ] || [ -d "$HOME/gcc-32/bin" ]; then
-            CMD_PATH="$HOME/gcc-64/bin:$HOME/gcc-32/bin"
-            if [ -n "${GCC64}" ]; then
-                CMD_CC="$HOME/gcc-64/bin/${GCC64}-gcc"
-            else
-                CMD_CC="$HOME/gcc-32/bin/${GCC32}-gcc"
-            fi
-            CMD_CROSS_COMPILE="${GCC64}-"
-            CMD_CROSS_COMPILE_ARM32="${GCC32}-"
-            CMD_CLANG_TRIPLE="aarch64-linux-gnu-"
-        else
-            CMD_CC="/usr/bin/clang"
-            CMD_CROSS_COMPILE="/usr/bin/aarch64-linux-gnu-"
-            CMD_CROSS_COMPILE_ARM32="arm-linux-gnuabeihf-"
-            CMD_CLANG_TRIPLE="aarch64-linux-gnu-"
-        fi
-
-        if [ ${{ inputs.ccache }} = true ]; then
-            # enable ccache
-            export USE_CCACHE=1
-            export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-
-            # ensure /usr/lib/ccache is first inside CMD_PATH
-            test -f /usr/bin/ccache && $SU rm -v /usr/bin/ccache
-            CMD_PATH="/usr/lib/ccache:${CMD_PATH}"
-
-            # verify compiler exist in /usr/lib/ccache
-            if [ -d "${HOME}/clang/bin" ]; then
-                [ ! -e /usr/lib/clang ] && \
-                    ln -s /usr/lib/clang /usr/bin/ccache
-            else
-                if [ -n "${GCC64}" ]; then
-                    [ ! -e "/usr/lib/${GCC64}-gcc" ] && \
-                        ln -s "/usr/lib/${GCC64}-gcc" /usr/bin/ccache
-                else
-                    [ ! -e "/usr/lib/${GCC32}-gcc" ] && \
-                        ln -s "/usr/lib/${GCC32}-gcc" /usr/bin/ccache
-                fi
-            fi
-        fi
-
-        # setup additional commands
-        COMMAND+=" PATH=${CMD_PATH}:${PATH} CROSS_COMPILE=${CMD_CROSS_COMPILE} CROSS_COMPILE_ARM32=${CMD_CROSS_COMPILE_ARM32} CLANG_TRIPLE=${CMD_CLANG_TRIPLE} CC=${CMD_CC}"
-
         # run the command
         ${COMMAND}
         unset CMD_PATH CMD_CC CMD_CLANG_TRIPLE CMD_CROSS_COMPILE CMD_CROSS_COMPILE_ARM32 USE_CCACHE CLANG_TRIPLE CROSS_COMPILE_ARM32 CROSS_COMPILE CLANG_PATH HOMES KVER COMMAND SWAP_FILE SUBLEVEL PATCHLEVEL VERSION GCC_DIR FILE FILE_NAME MATCHED_DIR FOLDER FOLDER_NAME GCC64 GCC32 NEED_GCC AOSP_CLANG_URL OTHER_CLANG_URL AOSP_GCC64_URL AOSP_GCC32_URL AOSP_GCC_BRANCH OTHER_GCC64_URL OTHER_GCC32_URL
@@ -478,8 +536,8 @@ runs:
 
 
         echo "::group:: Preparing Boot Image"
-        if [ ${{ inputs.anykernel3 }} = true ]; then
-        echo "::notice:: Packaging Kernel using Anykernel3"
+        if [ ${{ inputs.use-anykernel3 }} = true ]; then
+          echo "::notice:: Packaging Kernel using Anykernel3"
           if [ -n ${{ inputs.anykernel3-url }} ]; then
               git clone ${{ inputs.anykernel3-url }} AnyKernel3
           else
@@ -543,7 +601,7 @@ runs:
         echo "::endgroup::"
 
     - id: uploada
-      if: ${{ inputs.release == 'false' && inputs.anykernel3 == 'false' }}
+      if: ${{ inputs.release == 'false' && inputs.use-anykernel3 == 'false' }}
       uses: actions/upload-artifact@v4
       with:
         name: kernel-built-bootimg
@@ -552,7 +610,7 @@ runs:
         overwrite: true
 
     - id: uploadb
-      if: ${{ inputs.release == 'false' && inputs.anykernel3 == 'true' }}
+      if: ${{ inputs.release == 'false' && inputs.use-anykernel3 == 'true' }}
       uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.release-name }}

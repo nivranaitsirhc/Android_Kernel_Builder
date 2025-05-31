@@ -423,7 +423,7 @@ runs:
         PATCHLEVEL=$(grep -E '^PATCHLEVEL = ' Makefile | awk '{print $3}')
         SUBLEVEL=$(grep -E '^SUBLEVEL = ' Makefile | awk '{print $3}')
         if [ "$VERSION" -lt 5 ]; then
-        xq  touch nongki.txt
+          touch nongki.txt
         elif [ "$PATCHLEVEL" -lt 10 ]; then
           echo false > nongki.txt
         fi

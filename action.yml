@@ -361,9 +361,10 @@ runs:
         fi
 
         if [ ${{ inputs.use-ccache }} = true ]; then
-          # enable ccache
+          echo "::notice::CCACHE is enabled!"
           export USE_CCACHE=1
           #export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+          echo "Listing CCACHE -> $(ls /usr/lib/ccache)"
 
           # ensure /usr/lib/ccache is first inside CMD_PATH
           CMD_PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:${CMD_PATH}"

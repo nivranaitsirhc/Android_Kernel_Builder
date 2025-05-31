@@ -234,7 +234,7 @@ runs:
           echo "::group:: Setting CLANG"
           if [ ${{ inputs.aosp-clang }} = true ]; then
             echo "::notice:: Using AOSP clang"
-            if [ ! -z ${{ inputs.android-version }} ]; then
+            if [ -n "${{ inputs.android-version }}" ]; then
               export AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android${{ inputs.android-version }}-release/clang-${{ inputs.aosp-clang-version }}.tar.gz"
             else
               export AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/mirror-goog-main-llvm-toolchain-source/clang-${{ inputs.aosp-clang-version }}.tar.gz"
@@ -242,7 +242,7 @@ runs:
             download_and_extract "$AOSP_CLANG_URL" "aosp-clang" "$HOME/clang"
             # need GCC when using aosp-clang
             export NEED_GCC=1
-          elif [ ! -z ${{ inputs.other-clang-url }} ]; then
+          elif [ -n "${{ inputs.other-clang-url }}" ]; then
             echo "::notice:: Using third-party clang"
             export OTHER_CLANG_URL=${{ inputs.other-clang-url }}
             download_and_extract "$OTHER_CLANG_URL" "clang" "$HOME/clang" "${{ inputs.other-clang-branch }}"
@@ -265,7 +265,7 @@ runs:
           echo "::group:: Setting GCC"
           if [ ${{ inputs.aosp-gcc }} = true ] || [ -n "$NEED_GCC" ]; then
             echo "::notice:: Downloading AOSP GCC."
-            if [ ! -z ${{ inputs.android-version }} ]; then
+            if [ -n "${{ inputs.android-version }}" ]; then
               export AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9"
               export AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9"
               export AOSP_GCC_BRANCH="android${{ inputs.android-version }}-release"
@@ -275,7 +275,7 @@ runs:
             fi
             download_and_extract "$AOSP_GCC64_URL" "gcc-aarch64" "$HOME/gcc-64" "$AOSP_GCC_BRANCH"
             download_and_extract "$AOSP_GCC32_URL" "gcc-arm" "$HOME/gcc-32" "$AOSP_GCC_BRANCH"
-          elif [ -n ${{ inputs.other-gcc64-url }} ] || [ -n ${{ inputs.other-gcc32-url }} ]; then
+          elif [ -n "${{ inputs.other-gcc64-url }}" ] || [ -n "${{ inputs.other-gcc32-url }}" ]; then
             echo "::notice:: Downloading third-party GCC."
             export OTHER_GCC64_URL=${{ inputs.other-gcc64-url }}
             export OTHER_GCC32_URL=${{ inputs.other-gcc32-url }}
@@ -391,6 +391,7 @@ runs:
 
         # setup additional commands
         COMMAND+=" PATH=${CMD_PATH}:${PATH} CROSS_COMPILE=${CMD_CROSS_COMPILE} CROSS_COMPILE_ARM32=${CMD_CROSS_COMPILE_ARM32} CLANG_TRIPLE=${CMD_CLANG_TRIPLE} CC=${CMD_CC}"
+        echo "Generated COMMAND -> ${COMMAND}"
 
         echo "::endgroup::"
 
@@ -400,9 +401,9 @@ runs:
         echo "::notice:: Downloading Kernel Source"
         git clone --recursive ${{ inputs.kernel-url }} -b "${{ inputs.kernel-branch }}" --depth=${{ inputs.clone-depth }} kernel/${{ inputs.kernel-dir }}
 
-        if [ -n ${{ inputs.kernel-vendor-url }} ]; then
+        if [ -n "${{ inputs.kernel-vendor-url }}" ]; then
           echo "::notice:: Downloading Kernel Vendor Source"
-          if [ -n ${{ inputs.kernel-vendor-branch }} ];then
+          if [ -n "${{ inputs.kernel-vendor-branch }}" ];then
             git clone ${{ inputs.kernel-vendor-url }} --depth=${{ inputs.clone-depth }} kernel/${{ inputs.kernel-vendor-dir }} -b ${{ inputs.kernel-vendor-branch }}
           else
             git clone ${{ inputs.kernel-vendor-url }} --depth=${{ inputs.clone-depth }} kernel/${{ inputs.kernel-vendor-dir }}
@@ -432,7 +433,7 @@ runs:
           if [ -f KernelSU/kernel/Kconfig ]; then
               echo "::notice::KernelSU has already been initialized!"
           else
-            if [ -n ${{ inputs.ksu-url }} ]; then
+            if [ -n "${{ inputs.ksu-url }}" ]; then
               curl -SsL "${{ inputs.ksu-url }}/raw/${{ inputs.ksu-version }}/kernel/setup.sh" | bash -s ${{ inputs.ksu-version }}
             else
               echo "Kernel version: $VERSION.$PATCHLEVEL.$SUBLEVEL"
@@ -533,7 +534,6 @@ runs:
         fi
 
         echo "::group:: Building Kernel"
-        echo "::notice::starting.. ${COMMAND}"
         mkdir out -p -v
         # run the command
         ${COMMAND}
@@ -544,7 +544,7 @@ runs:
         echo "::group:: Preparing Boot Image"
         if [ ${{ inputs.use-anykernel3 }} = true ]; then
           echo "::notice:: Packaging Kernel using Anykernel3"
-          if [ -n ${{ inputs.anykernel3-url }} ]; then
+          if [ -n "${{ inputs.anykernel3-url }}" ]; then
               git clone ${{ inputs.anykernel3-url }} AnyKernel3
           else
               git clone https://github.com/osm0sis/AnyKernel3

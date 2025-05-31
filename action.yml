@@ -361,27 +361,32 @@ runs:
         fi
 
         if [ ${{ inputs.use-ccache }} = true ]; then
-            # enable ccache
-            export USE_CCACHE=1
-            export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+          # enable ccache
+          export USE_CCACHE=1
+          #export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
 
-            # ensure /usr/lib/ccache is first inside CMD_PATH
-            test -f /usr/bin/ccache && $SU rm -v /usr/bin/ccache
-            CMD_PATH="/usr/lib/ccache:${CMD_PATH}"
+          # ensure /usr/lib/ccache is first inside CMD_PATH
+          CMD_PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:${CMD_PATH}"
 
-            # verify compiler exist in /usr/lib/ccache
-            if [ -d "${HOME}/clang/bin" ]; then
-                [ ! -e /usr/lib/clang ] && \
-                    ln -s /usr/lib/clang /usr/bin/ccache
-            else
-                if [ -n "${GCC64}" ]; then
-                    [ ! -e "/usr/lib/${GCC64}-gcc" ] && \
-                        ln -s "/usr/lib/${GCC64}-gcc" /usr/bin/ccache
-                else
-                    [ ! -e "/usr/lib/${GCC32}-gcc" ] && \
-                        ln -s "/usr/lib/${GCC32}-gcc" /usr/bin/ccache
-                fi
-            fi
+          # verify compiler exist in /usr/lib/ccache
+          if [ ${{ inputs.use-clang }} = true ] && [ -d "${HOME}/clang/bin" ]; then
+            [ ! -e /usr/lib/ccache/clang ] && {
+              echo "::notice:: Linking clang to ccache"
+              ln -s /usr/lib/ccache/clang /usr/bin/ccache
+            }
+          fi
+          if [ ${{ inputs.use-gcc }} = true ] || [ -n "$NEED_GCC" ]; then
+            [ -n "${GCC64}" ] && \
+              [ ! -e "/usr/lib/ccache/${GCC64}-gcc" ] && {  
+                echo "::notice:: Linking ${GCC64} to ccache"
+                ln -s "/usr/lib/ccache/${GCC64}-gcc" /usr/bin/ccache
+              }
+            [ -n "${GCC64}" ] && \
+              [ ! -e "/usr/lib/ccache/${GCC32}-gcc" ] && {
+                echo "::notice:: Linking ${GCC32} to ccache"
+                ln -s "/usr/lib/ccache/${GCC32}-gcc" /usr/bin/ccache
+              }
+          fi
         fi
 
         # setup additional commands

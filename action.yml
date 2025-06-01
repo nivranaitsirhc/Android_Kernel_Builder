@@ -578,7 +578,7 @@ runs:
 
           [ ${{ inputs.rel-name-ksu-version }} = true ] && {
             # check if KernelSU is present
-            if [ -d ./KernelSU ] && [ -d ./KernelSU/.git ]; then
+            if [ -d "$HOME/kernel/${{ inputs.kernel-dir }}/KernelSU/.git" ]; then
               # KernelSU Version Generation
               KERNEL_KSU_GITVER=$(shell cd "$HOME/kernel/${{ inputs.kernel-dir }}/KernelSU"; /usr/bin/env PATH="$PATH":/usr/bin:/usr/local/bin git rev-list --count HEAD)
               KERNEL_KSU_VER=$(shell expr 10000 + $(KSU_GIT_VERSION) + 200)

@@ -569,21 +569,21 @@ runs:
         elif [ ${{ inputs.release }} = true ] && [ ${{ inputs.use-extended-rel-name }} = true ]; then
           echo "::group:: Generate Extended Release Name"
           RELEASE_NAME=${{ inputs.release-name }}
-          [ ${{rel-name-kernel-version}} = true ] && {
+          [ ${{ inputs.rel-name-kernel-version}} = true ] && {
             RELEASE_NAME+=" $VERSION.$PATCHLEVEL.$SUBLEVEL"
-            [ ${{rel-name-kernel-sha}} = true ] && {
+            [ ${{ inputs.rel-name-kernel-sha }} = true ] && {
               RELEASE_NAME+="@${KERNEL_SHA}"
             }
           }
 
-          [ ${{rel-name-ksu-version}} = true ] && {
+          [ ${{ inputs.rel-name-ksu-version }} = true ] && {
             # check if KernelSU is present
             if [ -d ./KernelSU ] && [ -d ./KernelSU/.git ]; then
               # KernelSU Version Generation
               KERNEL_KSU_GITVER=$(shell cd "$HOME/kernel/${{ inputs.kernel-dir }}/KernelSU"; /usr/bin/env PATH="$PATH":/usr/bin:/usr/local/bin git rev-list --count HEAD)
               KERNEL_KSU_VER=$(shell expr 10000 + $(KSU_GIT_VERSION) + 200)
               RELEASE_NAME+=" KSUv-$KERNEL_KSU_VER"
-              [ ${{rel-name-ksu-sha}} = true ] && {
+              [ ${{ inputs.rel-name-ksu-sha }} = true ] && {
                 KERNEL_KSU_SHA=$(shell cd "$HOME/kernel/${{ inputs.kernel-dir }}/KernelSU"; /usr/bin/env PATH="$PATH":/usr/bin:/usr/local/bin git rev-parse --short HEAD)
                 RELEASE_NAME+="@${KERNEL_SHA}"
               }

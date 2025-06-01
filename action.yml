@@ -249,14 +249,14 @@ runs:
 
 
         # Setup Build Dependencies
-        echo "::group:: Installing building dependency packages"
+        echo "::group:: ⚙️ Setup Build Dependencies"
         "SU" apt-get update
         "SU" apt-get install --no-install-recommends -y binutils git make bc bison openssl curl zip kmod cpio flex libelf-dev libssl-dev libtfm-dev libc6-dev device-tree-compiler ca-certificates python3 xz-utils libc6-dev aria2 build-essential ccache pigz coccinelle parallel
         echo "::endgroup::"
 
         # Setup CLANG
         if [ ${{ inputs.use-clang }} = true ]; then
-          echo "::group:: Setting CLANG"
+          echo "::group:: ⚙️ Setup CLANG"
           if [ ${{ inputs.aosp-clang }} = true ]; then
             echo "::notice:: Using AOSP clang"
             if [ -n "${{ inputs.android-version }}" ]; then
@@ -287,7 +287,7 @@ runs:
 
         # Setup GCC
         if [ ${{ inputs.use-gcc }} = true ] || [ -n "$NEED_GCC" ]; then
-          echo "::group:: Setting GCC"
+          echo "::group:: ⚙️ Setup GCC"
           if [ ${{ inputs.aosp-gcc }} = true ] || [ -n "$NEED_GCC" ]; then
             echo "::notice:: Downloading AOSP GCC."
             if [ -n "${{ inputs.android-version }}" ]; then
@@ -335,7 +335,7 @@ runs:
         fi
 
         # Pre-Build Setup
-        echo "::group:: Pre-Build Setup"
+        echo "::group:: ⚙️ Pre-Build Setup"
 
         # initial command
         COMMAND="make -j$(nproc --all) ${{ inputs.defconfig }} ARCH=${{ inputs.arch }} all ${{ inputs.extra-cmd }} O=out"
@@ -423,7 +423,7 @@ runs:
 
 
         # Setup Target Kernel
-        echo "::group:: Fetching Kernel Source"
+        echo "::group:: ⚙️ Fetch Kernel Source"
         echo "::notice:: Downloading Kernel Source"
         git clone --recursive ${{ inputs.kernel-url }} -b "${{ inputs.kernel-branch }}" --depth=${{ inputs.clone-depth }} kernel/${{ inputs.kernel-dir }}
 
@@ -460,7 +460,8 @@ runs:
 
         # Setup Kernel SU
         if [ ${{ inputs.use-ksu }} = true ]; then
-          echo "::group:: Initializing KernelSU"
+          echo "::group:: ⚙️ Setup KernelSU"
+          echo "::notice::Initializing KernelSU"
           if [ -f KernelSU/kernel/Kconfig ]; then
               echo "::notice::KernelSU has already been initialized!"
           else
@@ -497,14 +498,14 @@ runs:
         # Use mkdtboimg Py3
         if [ -f scripts/dtc/libfdt/mkdtboimg.py ]; then
           if grep python2 scripts/Makefile.lib >/dev/null; then
-            echo "::group:: Using mkdtboimg Python3 version instead of Python2 version"
+            echo "::group:: ⚙️ Use mkdtboimg Python3 version instead of Python2 version"
             rm -rf -v scripts/dtc/libfdt/mkdtboimg.py && aria2c https://github.com/dabao1955/kernel_build_action/raw/main/mkdtboimg.py -o scripts/dtc/libfdt/mkdtboimg.py
           elif grep scripts/ufdt && test ! -d scripts/ufdt >/dev/null; then
             aria2c https://github.com/dabao1955/kernel_build_action/raw/main/mkdtboimg.py -o ufdt/libufdt/utils/src/mkdtboimg.py
           fi
           test -f /usr/bin/python2 || "SU" ln -s -f -v /usr/bin/python3 /usr/bin/python2
         else
-          echo "::group:: Downloading mkdtboimg to /usr/local/bin"
+          echo "::group:: ⚙️ Downloading mkdtboimg to /usr/local/bin"
           SU aria2c https://github.com/dabao1955/kernel_build_action/raw/main/mkdtboimg.py -o mkdtboimg
           SU chmod +x -v mkdtboimg
           SU mv mkdtboimg -v /usr/local/bin/mkdtboimg
@@ -567,7 +568,7 @@ runs:
         if [ ${{ inputs.release }} = true ] && [ ${{ inputs.use-extended-rel-name }} = false ]; then
           echo "RELEASE_NAME=${{ inputs.release-name }}" >> "$GITHUB_OUTPUT"
         elif [ ${{ inputs.release }} = true ] && [ ${{ inputs.use-extended-rel-name }} = true ]; then
-          echo "::group:: Generate Extended Release Name"
+          echo "::group:: ⚙️ Generate Extended Release Name"
           RELEASE_NAME=${{ inputs.release-name }}
           [ ${{ inputs.rel-name-kernel-version}} = true ] && {
             RELEASE_NAME+=" $VERSION.$PATCHLEVEL.$SUBLEVEL"
@@ -578,7 +579,7 @@ runs:
 
           [ ${{ inputs.rel-name-ksu-version }} = true ] && {
             # check if KernelSU is present
-            if [ -d "$HOME/kernel/${{ inputs.kernel-dir }}/KernelSU/.git" ]; then
+            if [ -e "$HOME/kernel/${{ inputs.kernel-dir }}/KernelSU/.git" ]; then
               # KernelSU Version Generation
               KERNEL_KSU_GITVER=$(shell cd "$HOME/kernel/${{ inputs.kernel-dir }}/KernelSU"; /usr/bin/env PATH="$PATH":/usr/bin:/usr/local/bin git rev-list --count HEAD)
               KERNEL_KSU_VER=$(shell expr 10000 + $(KSU_GIT_VERSION) + 200)
@@ -596,7 +597,7 @@ runs:
           echo "::endgroup::"
         fi
 
-        echo "::group:: Building Kernel"
+        echo "::group:: ⚙️ Build Kernel"
         mkdir out -p -v
         # run the command
         ${COMMAND}
@@ -608,7 +609,7 @@ runs:
           ccache --show-stats -v
         fi
 
-        echo "::group:: Preparing Boot Image"
+        echo "::group:: ⚙️ Prepare Boot Image"
         if [ ${{ inputs.use-anykernel3 }} = true ]; then
           echo "::notice:: Packaging Kernel using Anykernel3"
           if [ -n "${{ inputs.anykernel3-url }}" ]; then

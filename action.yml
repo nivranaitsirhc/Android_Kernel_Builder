@@ -583,8 +583,8 @@ runs:
             if [ -e "$KCWD/KernelSU" ]; then
               # KernelSU Version Generation
               KERNEL_KSU_GITVER=$(cd "$KCWD/KernelSU"; /usr/bin/env PATH="$PATH":/usr/bin:/usr/local/bin git rev-list --count HEAD)
-              KERNEL_KSU_VER=$(expr 10000 + $KSU_GIT_VERSION + 200)
-              RELEASE_NAME+=" KSUv-$KERNEL_KSU_VER"
+              KERNEL_KSU_VER=$(expr 10000 + $KERNEL_KSU_GITVER + 200)
+              RELEASE_NAME+=" KSUv$KERNEL_KSU_VER"
               [ ${{ inputs.rel-name-ksu-sha }} = true ] && {
                 KERNEL_KSU_SHA=$(cd "$KCWD/KernelSU"; /usr/bin/env PATH="$PATH":/usr/bin:/usr/local/bin git rev-parse --short HEAD)
                 RELEASE_NAME+="@${KERNEL_SHA}"

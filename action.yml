@@ -398,19 +398,19 @@ runs:
           if [ ${{ inputs.use-clang }} = true ] && [ -d "${HOME}/clang/bin" ]; then
             [ ! -e /usr/lib/ccache/clang ] && {
               echo "::notice:: Linking clang to ccache"
-              ln -s /usr/bin/ccache /usr/lib/ccache/clang
+              "SU" ln -s /usr/bin/ccache /usr/lib/ccache/clang
             }
           fi
           if [ ${{ inputs.use-gcc }} = true ] || [ -n "$NEED_GCC" ]; then
             [ -n "${GCC64}" ] && \
               [ ! -e "/usr/lib/ccache/${GCC64}-gcc" ] && {  
                 echo "::notice:: Linking ${GCC64} to ccache"
-                "$SU" ln -s /usr/bin/ccache "/usr/lib/ccache/${GCC64}-gcc"
+                "SU" ln -s /usr/bin/ccache "/usr/lib/ccache/${GCC64}-gcc"
               }
             [ -n "${GCC32}" ] && \
               [ ! -e "/usr/lib/ccache/${GCC32}-gcc" ] && {
                 echo "::notice:: Linking ${GCC32} to ccache"
-                "$SU" ln -s /usr/bin/ccache "/usr/lib/ccache/${GCC32}-gcc"
+                "SU" ln -s /usr/bin/ccache "/usr/lib/ccache/${GCC32}-gcc"
               }
           fi
         fi

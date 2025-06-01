@@ -703,7 +703,7 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.access-token }}
       with:
-        name: ${{ setps.build-kernel.outputs.RELEASE_NAME }}
+        name: ${{ steps.build-kernel.outputs.RELEASE_NAME }}
         tag_name: ${{ inputs.release-name }}@${{ steps.build-kernel.outputs.KERNEL_SHA }}
         files: build/*
         make_latest: true

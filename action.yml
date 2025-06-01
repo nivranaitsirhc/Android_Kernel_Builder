@@ -19,13 +19,31 @@ inputs:
     description: 'Custom release name of package kernel'
     required: false
     default: 'Anykernel3-Flasher'
+  use-extended-rel-name:
+    description: Enable extended release-name
+  rel-name-kernel-version:
+    description: 'Append kernel-version to release name'
+    required: false
+    default: 'false'
+  rel-name-kernel-sha:
+    description: 'Append kernel-sha to release name'
+    required: false
+    default: 'false'
+  rel-name-ksu-version:
+    description: 'Append ksu-version to release name'
+    required: false
+    default: 'false'
+  rel-name-ksu-sha:
+    description: 'Append ksu-sha to release name'
+    required: false
+    default: 'false'
 # Build Config
   use-ccache:
     description: 'Enable CCache'
     required: false
     default: 'false'
   ccache-stats:
-    description: 'Prints CCache Stats'
+    description: 'Prints CCache Stats in the log.'
     required: false
     default: 'false'
   extra-cmd:
@@ -175,7 +193,8 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Setup ccache
+    - name: CCache Setup
+      id: cache-setup
       if: inputs.use-ccache == 'true'
       uses: hendrikmuhs/ccache-action@main
       with:
@@ -185,6 +204,7 @@ runs:
         create-symlink: true
 
     - name: Build Kernel
+      id: build-kernel
       shell: bash
       run: |
         #!/bin/bash
@@ -423,15 +443,20 @@ runs:
         # Move to Kernel dir
         cd kernel/${{ inputs.kernel-dir }}
 
-        # Evaluate target Kernel for GKI/NON-GKI support
+        # Evaluate Kernel
         VERSION=$(grep -E '^VERSION = ' Makefile | awk '{print $3}')
         PATCHLEVEL=$(grep -E '^PATCHLEVEL = ' Makefile | awk '{print $3}')
         SUBLEVEL=$(grep -E '^SUBLEVEL = ' Makefile | awk '{print $3}')
+        KERNEL_SHA=$(git rev-parse --short HEAD)
         if [ "$VERSION" -lt 5 ]; then
           touch nongki.txt
         elif [ "$PATCHLEVEL" -lt 10 ]; then
           echo false > nongki.txt
         fi
+        # Pass Kernel SHA to release
+        [ ${{ inputs.release}} = true ] && {
+          echo "KERNEL_SHA=$KERNEL_SHA" >> "$GITHUB_OUTPUT"
+        }
 
         # Setup Kernel SU
         if [ ${{ inputs.use-ksu }} = true ]; then
@@ -539,6 +564,38 @@ runs:
           echo "::endgroup::"
         fi
 
+        if [ ${{ inputs.release }} = true ] && [ ${{ inputs.use-extended-rel-name }} = false ]; then
+          echo "RELEASE_NAME=${{ inputs.release-name }}" >> "$GITHUB_OUTPUT"
+        elif [ ${{ inputs.release }} = true ] && [ ${{ inputs.use-extended-rel-name }} = true ]; then
+          echo "::group:: Generate Extended Release Name"
+          RELEASE_NAME=${{ inputs.release-name }}
+          [ ${{rel-name-kernel-version}} = true ] && {
+            RELEASE_NAME+=" $VERSION.$PATCHLEVEL.$SUBLEVEL"
+            [ ${{rel-name-kernel-sha}} = true ] && {
+              RELEASE_NAME+="@${KERNEL_SHA}"
+            }
+          }
+
+          [ ${{rel-name-ksu-version}} = true ] && {
+            # check if KernelSU is present
+            if [ -d ./KernelSU ] && [ -d ./KernelSU/.git ]; then
+              # KernelSU Version Generation
+              KERNEL_KSU_GITVER=$(shell cd "$HOME/kernel/${{ inputs.kernel-dir }}/KernelSU"; /usr/bin/env PATH="$PATH":/usr/bin:/usr/local/bin git rev-list --count HEAD)
+              KERNEL_KSU_VER=$(shell expr 10000 + $(KSU_GIT_VERSION) + 200)
+              RELEASE_NAME+=" KSUv-$KERNEL_KSU_VER"
+              [ ${{rel-name-ksu-sha}} = true ] && {
+                KERNEL_KSU_SHA=$(shell cd "$HOME/kernel/${{ inputs.kernel-dir }}/KernelSU"; /usr/bin/env PATH="$PATH":/usr/bin:/usr/local/bin git rev-parse --short HEAD)
+                RELEASE_NAME+="@${KERNEL_SHA}"
+              }
+            else
+              echo "::warning::Unable to apply rel-name-ksu-version due non-existent KSU directory."
+            fi
+          }
+          # For github_output
+          echo "RELEASE_NAME=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+          echo "::endgroup::"
+        fi
+
         echo "::group:: Building Kernel"
         mkdir out -p -v
         # run the command
@@ -579,11 +636,17 @@ runs:
           if [ ${{ inputs.release }} = false ]; then
             cp -r -v AnyKernel3/* ../../build
           else
+            if [ ${{ inputs.use-extended-rel-name }} = true ]; then
+              SAFE_RELEASE_NAME="${RELEASE_NAME// /_}"
+            else
+              SAFE_RELEASE_NAME="${{ inputs.release-name }}"
+              SAFE_RELEASE_NAME="${SAFE_RELEASE_NAME// /_}"
+            fi
             cd AnyKernel3 && \
-              zip -r ${{ inputs.release-name}}.zip ./* && \
-              mv -v ${{ inputs.release-name}}.zip .. && \
+              zip -r "$SAFE_RELEASE_NAME.zip" ./* && \
+              mv -v "$SAFE_RELEASE_NAME.zip" .. && \
               cd .. && \
-              mv -v ${{ inputs.release-name}}.zip ../../build/
+              mv -v "$SAFE_RELEASE_NAME.zip" ../../build/
           fi
         else
           echo "::notice:: Preparing to Upload boot.img"
@@ -640,11 +703,11 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.access-token }}
       with:
-        name: Latest KernelBuild
-        tag_name: ${{ inputs.release-name }}-${{ github.sha }}
+        name: ${{ setps.build-kernel.outputs.RELEASE_NAME }}
+        tag_name: ${{ inputs.release-name }}@${{ steps.build-kernel.outputs.KERNEL_SHA }}
         files: build/*
         make_latest: true
         body: |
-            source: ${{ inputs.kernel-url }}
-            branch: ${{ inputs.kernel-branch }}
-            config: ${{ inputs.config }}
+          source: ${{ inputs.kernel-url }}
+          branch: ${{ inputs.kernel-branch }}
+          config: ${{ inputs.defconfig }}

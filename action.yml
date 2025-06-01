@@ -587,7 +587,7 @@ runs:
               RELEASE_NAME+=" KSUv$KERNEL_KSU_VER"
               [ ${{ inputs.rel-name-ksu-sha }} = true ] && {
                 KERNEL_KSU_SHA=$(cd "$KCWD/KernelSU"; /usr/bin/env PATH="$PATH":/usr/bin:/usr/local/bin git rev-parse --short HEAD)
-                RELEASE_NAME+="@${KERNEL_SHA}"
+                RELEASE_NAME+="@${KERNEL_KSU_SHA}"
               }
             else
               echo "::warning::Unable to apply rel-name-ksu-version due non-existent KSU directory."

@@ -578,10 +578,10 @@ runs:
           }
 
           [ ${{ inputs.rel-name-ksu-version }} = true ] && {
+            export KCWD="$(pwd)"
             # check if KernelSU is present
-            if [ -e "/KernelSU" ]; then
+            if [ -e "$KCWD/KernelSU" ]; then
               # KernelSU Version Generation
-              export KCWD="$(pwd)"
               KERNEL_KSU_GITVER=$(shell cd "$KCWD/KernelSU"; /usr/bin/env PATH="$PATH":/usr/bin:/usr/local/bin git rev-list --count HEAD)
               KERNEL_KSU_VER=$(shell expr 10000 + $(KSU_GIT_VERSION) + 200)
               RELEASE_NAME+=" KSUv-$KERNEL_KSU_VER"

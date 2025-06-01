@@ -595,6 +595,7 @@ runs:
           }
           # For github_output
           echo "RELEASE_NAME=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+          echo "::notice:: Release Name -> $RELEASE_NAME"
           echo "::endgroup::"
         fi
 

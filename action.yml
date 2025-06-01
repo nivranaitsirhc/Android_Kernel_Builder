@@ -309,8 +309,8 @@ runs:
           fi
 
           if [ -d $HOME/gcc-64 ] || [ -d $HOME/gcc-32 ]; then
-            [ ! -d $HOME/gcc-64/bin/ ] && mv $HOME/gcc-64/*/* $HOME/gcc-64/
-            [ ! -d $HOME/gcc-32/bin/ ] && mv $HOME/gcc-32/*/* $HOME/gcc-32/
+            [ ! -d $HOME/gcc-64/bin/ ] && mv $HOME/gcc-64/*/* $HOME/gcc-64/bin
+            [ ! -d $HOME/gcc-32/bin/ ] && mv $HOME/gcc-32/*/* $HOME/gcc-32/bin
           fi
           echo "::endgroup::"
         fi
@@ -345,7 +345,7 @@ runs:
           if [ -d "$HOME/clang/bin" ]; then
             echo "::notice::Using \$HOME/clang/bin/clang"
             # use clang
-            CMD_PATH="$HOME/clang/bin"
+            CMD_PATH="$HOME/clang/bin:${CMD_PATH}"
             CMD_CC="clang"
             CMD_CLANG_TRIPLE="aarch64-linux-gnu-"
             if [ -z "$NEED_GCC" ]; then
@@ -354,16 +354,20 @@ runs:
             else
               if [ -d "$HOME/gcc-64/bin" ] || [ -d "$HOME/gcc-32/bin" ]; then
                 echo "::notice::Using \$HOME/gcc-{64/32}/bin"
-                CMD_CROSS_COMPILE="$HOME/gcc-64/bin/${GCC64}-"
-                CMD_CROSS_COMPILE_ARM32="$HOME/gcc-32/bin/${GCC32}-"
+                # CMD_CROSS_COMPILE="$HOME/gcc-64/bin/${GCC64}-"
+                # CMD_CROSS_COMPILE_ARM32="$HOME/gcc-32/bin/${GCC32}-"
+                CMD_PATH="$HOME/gcc-64/bin:$HOME/gcc-32/bin:${CMD_PATH}"
+                CMD_CROSS_COMPILE="${GCC64}-"
+                CMD_CROSS_COMPILE_ARM32="${GCC32}-"
               else
                 echo "::error::Unable to setup cross-compile bins"
               fi
             fi
           elif [ -d "/usr/bin/clang" ]; then
             echo "::notice::Using /usr/bin/clang"
+            # CMD_PATH="/usr/bin:${CMD_PATH}"
             CMD_CC="/usr/bin/clang"
-            CMD_CROSS_COMPILE="/usr/bin/aarch64-linux-gnu-"
+            CMD_CROSS_COMPILE="aarch64-linux-gnu-"
             CMD_CROSS_COMPILE_ARM32="arm-linux-gnuabeihf-"
             CMD_CLANG_TRIPLE="aarch64-linux-gnu-"
           else
@@ -371,7 +375,7 @@ runs:
           fi
         elif [ ${{ inputs.use-gcc }} = true ]; then
           if [ -d "$HOME/gcc-64/bin" ] || [ -d "$HOME/gcc-32/bin" ]; then
-            CMD_PATH="$HOME/gcc-64/bin:$HOME/gcc-32/bin"
+            CMD_PATH="$HOME/gcc-64/bin:$HOME/gcc-32/bin:${CMD_PATH}"
             if [ -n "${GCC64}" ]; then
                 CMD_CC="$HOME/gcc-64/bin/${GCC64}-gcc"
             else

@@ -240,8 +240,8 @@ runs:
             AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9"
             AOSP_GCC_BRANCH="android${AOSP_GCC_ANDROID_VERSION}-release"
           else
-            export AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz"
-            export AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz"
+            AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz"
+            AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz"
           fi
           download_and_extract "$AOSP_GCC64_URL" "aosp-gcc-aarch64" "${PWD}/aosp-gcc-64" "$AOSP_GCC_BRANCH"
           download_and_extract "$AOSP_GCC32_URL" "aosp-gcc-arm" "${PWD}/aosp-gcc-32" "$AOSP_GCC_BRANCH"
@@ -254,6 +254,8 @@ runs:
         fi
 
         echo "::endgroup::"
+        echo "$PATH"
+        echo $(ls "${PWD}/aosp-gcc-64/bin")
 
     # ----------------------------
     # CCACHE

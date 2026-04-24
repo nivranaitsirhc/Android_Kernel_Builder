@@ -249,7 +249,7 @@ runs:
         echo "CC=ccache clang" >> $GITHUB_ENV
         echo "CXX=ccache clang++" >> $GITHUB_ENV
     
-    # - name: CCache Setup
+    # # - name: CCache Setup
     #   id: cache-setup
     #   if: inputs.use-ccache == 'true'
     #   uses: hendrikmuhs/ccache-action@main
@@ -259,14 +259,14 @@ runs:
     #     verbose: 1
     #     create-symlink: true
 
-    # 🔧 Your existing build steps go here
-    - name: Build Kernel
-      shell: bash
-      run: |
-        make O=out ARCH=arm64 defconfig
-        make -j$(nproc) O=out ARCH=arm64 \
-          CC="ccache clang" \
-          CXX="ccache clang++"
+    # # 🔧 Your existing build steps go here
+    # - name: Build Kernel
+    #   shell: bash
+    #   run: |
+    #     make O=out ARCH=arm64 defconfig
+    #     make -j$(nproc) O=out ARCH=arm64 \
+    #       CC="ccache clang" \
+    #       CXX="ccache clang++"
 
     - name: Build Kernel
       id: build-kernel

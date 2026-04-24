@@ -193,6 +193,19 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Install ccache
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y ccache
+
+    - name: Add ccache to PATH
+      shell: bash
+      run: echo "/usr/lib/ccache" >> $GITHUB_PATH
+
+    - name: Verify ccache
+      shell: bash
+      run: |
+        which ccache
+        ccache --version
 
   # ✅ Restore ccache BEFORE build
     - name: Restore ccache

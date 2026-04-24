@@ -144,7 +144,7 @@ runs:
         echo "::endgroup::"
         
         echo "::group:: ⚙️ Saving Functions to functions.sh"
-        echo << 'EOF' > functions.sh
+        echo << 'EOF' > "${PWD}/functions.sh"
         # download and extract files supports zip,tar,gz,xz,bz2,git
         download_and_extract() {
           local url=$1
@@ -194,7 +194,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        source functions.sh
+        source "${PWD}/functions.sh"
         
         echo "CC='clang'" >> $GITHUB_ENV
         echo "CXX='clang++'" >> $GITHUB_ENV

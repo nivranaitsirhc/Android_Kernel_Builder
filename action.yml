@@ -144,7 +144,9 @@ runs:
         echo "::endgroup::"
         
         echo "::group:: ⚙️ Saving Functions to functions.sh"
-        echo << 'EOF' > "${PWD}/functions.sh"
+        echo << 'EOF' > functions.sh
+        #!/usr/bin/env bash
+
         # download and extract files supports zip,tar,gz,xz,bz2,git
         download_and_extract() {
           local url=$1
@@ -167,6 +169,7 @@ runs:
           esac
         }
         EOF
+        chmod +x functions.sh
         echo "::endgroup::"
 
     # ----------------------------
@@ -194,7 +197,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        source "${PWD}/functions.sh"
+        source "$GITHUB_WORKSPACE/functions.sh"
         
         echo "CC='clang'" >> $GITHUB_ENV
         echo "CXX='clang++'" >> $GITHUB_ENV
@@ -224,7 +227,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        source functions.sh
+        source "$GITHUB_WORKSPACE/functions.sh"
 
         echo "CROSS_COMPILE='aarch64-linux-android-'" >> $GITHUB_ENV
         echo "CROSS_COMPILE_ARM32='arm-linux-androideabi-" >> $GITHUB_ENV
@@ -246,7 +249,7 @@ runs:
         else
           echo "::notice:: Using Custom GCC URL"
           download_and_extract "$OTHER_GCC64_URL" "custom-gcc" "${PWD}/custom-gcc" "${CUSTOM_GCC_BRANCH}"
-          echo "${PWD}/custom-gcc/bin" >> $GIHUB_PATH
+          echo "${PWD}/custom-gcc/bin" >> $GITHUB_PATH
         fi
 
         echo "::endgroup::"
@@ -269,13 +272,12 @@ runs:
         ccache -z
 
         echo "CCACHE_DIR=$CCACHE_DIR" >> $GITHUB_ENV
-        echo "CC='ccache clang'" >> $GITHUB_ENV
-        echo "CXX='ccache clang++'" >> $GITHUB_ENV
-        # echo "HOSTCC='ccache clang'" >> $GITHUB_ENV
-        # echo "HOSTCXX='ccache clang++'" >> $GITHUB_ENV
-        echo "CROSS_COMPILE='ccache aarch64-linux-android-'" >> $GITHUB_ENV
-        echo "CROSS_COMPILE_ARM32='ccache arm-linux-androideabi-" >> $GITHUB_ENV
-        echo "CLANG_TRIPLE='ccache aarch64-linux-gnu-" >> $GITHUB_ENV
+        echo "CC=ccache clang" >> $GITHUB_ENV
+        echo "CXX=ccache clang++" >> $GITHUB_ENV
+        # echo "HOSTCC=ccache clang" >> $GITHUB_ENV
+        # echo "HOSTCXX=ccache clang++" >> $GITHUB_ENV
+        echo "CROSS_COMPILE=ccache aarch64-linux-android-" >> $GITHUB_ENV
+        echo "CROSS_COMPILE_ARM32=ccache arm-linux-androideabi-" >> $GITHUB_ENV
 
     # ----------------------------
     # CLONE KERNEL

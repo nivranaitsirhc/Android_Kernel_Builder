@@ -199,8 +199,8 @@ runs:
         set -euo pipefail
         source "$GITHUB_WORKSPACE/functions.sh"
         
-        echo "CC='clang'" >> $GITHUB_ENV
-        echo "CXX='clang++'" >> $GITHUB_ENV
+        echo "CC=clang" >> $GITHUB_ENV
+        echo "CXX=clang++" >> $GITHUB_ENV
 
         echo "::group:: ⚙️ Setup CLANG"
         if [[ -z "$CUSTOM_CLANG_URL" ]]; then
@@ -229,8 +229,8 @@ runs:
         set -euo pipefail
         source "$GITHUB_WORKSPACE/functions.sh"
 
-        echo "CROSS_COMPILE='aarch64-linux-android-'" >> $GITHUB_ENV
-        echo "CROSS_COMPILE_ARM32='arm-linux-androideabi-" >> $GITHUB_ENV
+        echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
+        echo "CROSS_COMPILE_ARM32=arm-linux-androideabi-" >> $GITHUB_ENV
 
         echo "::group:: ⚙️ Setup GCC"
         if [[ -z "${CUSTOM_GCC_URL}" ]]; then

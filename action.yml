@@ -126,12 +126,12 @@ runs:
         echo "CUSTOM_GCC_BRANCH=${{ inputs.custom-gcc-branch }}" >> $GITHUB_ENV
 
         # cache
-        echo "USE_CACHE=${{ inputs.use-cache }}" >> $GITHUB_ENV
-        echo "SHOW_CACHE_STATS=$${{ inputs.show-cache-stats }}" >> $GITHUB_ENV
+        echo "USE_CCACHE=${{ inputs.use-ccache }}" >> $GITHUB_ENV
+        echo "SHOW_CACHE_STATS=$${{ inputs.show-ccache-stats }}" >> $GITHUB_ENV
 
         # kernelsu
         echo "USE_KSU=${{ inputs.use-ksu }}" >> $GITHUB_ENV
-        echo "KSU_URL_SETUP=${{ inputs.ksu-url }}" >> $GITHUB_ENV
+        echo "KSU_URL_SETUP=${{ inputs.ksu-url-setup }}" >> $GITHUB_ENV
         echo "KSU_VERSION=${{ inputs.ksu-version }}" >> $GITHUB_ENV
 
         # anykernel
@@ -182,7 +182,7 @@ runs:
         sudo apt-get update
         sudo apt-get install --no-install-recommends -y $INSTALL_COMMANDS
 
-        if [[ "$USE_CACHE" == "true" ]]; then
+        if [[ "$USE_CCACHE" == "true" ]]; then
           sudo apt-get install -y ccache
         fi
         if [[ -n "$USE_CLANG" ]]; then

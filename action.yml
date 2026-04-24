@@ -313,6 +313,28 @@ runs:
 
 
 
+        DEFCONFIG_PATH="arch/arm64/configs/${{ inputs.defconfig }}"
+
+        echo "[*] Enabling KernelSU in $DEFCONFIG_PATH"
+
+        # Ensure file exists
+        if [ ! -f "$DEFCONFIG_PATH" ]; then
+          echo "[!] Defconfig not found!"
+          exit 1
+        fi
+
+        # Remove any existing KSU lines (avoid duplicates/conflicts)
+        sed -i '/CONFIG_KSU/d' "$DEFCONFIG_PATH"
+
+        # Append required config
+        echo "CONFIG_KSU=y" >> "$DEFCONFIG_PATH"
+
+        # Optional (safer for compatibility)
+        grep -q "CONFIG_KPROBES" "$DEFCONFIG_PATH" || echo "CONFIG_KPROBES=y" >> "$DEFCONFIG_PATH"
+        grep -q "CONFIG_HAVE_KPROBES" "$DEFCONFIG_PATH" || echo "CONFIG_HAVE_KPROBES=y" >> "$DEFCONFIG_PATH"
+
+        echo "[*] Done"
+
     # ----------------------------
     # BUILD
     # ----------------------------
@@ -321,6 +343,8 @@ runs:
       run: |
         set -euo pipefail
         cd target-kernel
+
+        make $DEFCONFIG
         
         # ARCH,CROSS_COMPILE,CROSS_COMPILE_ARM32,CLANG_TRIPLE is in $GITHUB_ENV
         make -j$(nproc --all) $DEFCONFIG $EXTENDED_BUILD_COMMANDS O=out

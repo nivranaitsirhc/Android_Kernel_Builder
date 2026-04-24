@@ -193,15 +193,67 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: CCache Setup
-      id: cache-setup
-      if: inputs.use-ccache == 'true'
-      uses: hendrikmuhs/ccache-action@main
+
+  # ✅ Restore ccache BEFORE build
+    - name: Restore ccache
+      uses: actions/cache@v4
       with:
-        key: ${{ inputs.defconfig }}-0cb68f9cbcbb3de9c966cf66ed51471fbe51419e
-        max-size: 4G
-        verbose: 1
-        create-symlink: true
+        path: ~/.ccache
+        key: ccache-${{ runner.os }}-${{ github.repository }}-${{ github.ref_name }}
+        restore-keys: |
+          ccache-${{ runner.os }}-${{ github.repository }}-
+          ccache-${{ runner.os }}-
+  # ✅ Setup ccache properly
+    - name: Configure ccache
+      shell: bash
+      run: |
+        mkdir -p ~/.ccache
+
+        export CCACHE_DIR=~/.ccache
+        export CCACHE_BASEDIR=${GITHUB_WORKSPACE}
+        export CCACHE_COMPRESS=1
+        export CCACHE_COMPRESSLEVEL=6
+        export CCACHE_MAXSIZE=10G
+        export CCACHE_NOHASHDIR=true
+        export CCACHE_SLOPPINESS=time_macros,file_macro
+
+        ccache -M 10G
+        ccache -z
+
+        echo "CCACHE_DIR=$CCACHE_DIR" >> $GITHUB_ENV
+        echo "CCACHE_BASEDIR=$CCACHE_BASEDIR" >> $GITHUB_ENV
+        echo "CCACHE_COMPRESS=1" >> $GITHUB_ENV
+        echo "CCACHE_NOHASHDIR=true" >> $GITHUB_ENV
+
+    # ✅ Force kernel to use ccache
+    - name: Inject ccache into toolchain
+      shell: bash
+      run: |
+        export PATH="/usr/lib/ccache:$PATH"
+        echo "PATH=/usr/lib/ccache:$PATH" >> $GITHUB_ENV
+
+        # fallback explicit
+        echo "CC=ccache clang" >> $GITHUB_ENV
+        echo "CXX=ccache clang++" >> $GITHUB_ENV
+    
+    # - name: CCache Setup
+    #   id: cache-setup
+    #   if: inputs.use-ccache == 'true'
+    #   uses: hendrikmuhs/ccache-action@main
+    #   with:
+    #     key: ${{ inputs.defconfig }}-0cb68f9cbcbb3de9c966cf66ed51471fbe51419e
+    #     max-size: 4G
+    #     verbose: 1
+    #     create-symlink: true
+
+    # 🔧 Your existing build steps go here
+    - name: Build Kernel
+      shell: bash
+      run: |
+        make O=out ARCH=arm64 defconfig
+        make -j$(nproc) O=out ARCH=arm64 \
+          CC="ccache clang" \
+          CXX="ccache clang++"
 
     - name: Build Kernel
       id: build-kernel

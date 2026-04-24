@@ -559,7 +559,7 @@ runs:
               echo "CONFIG_KPROBES is enabled, skip patch."
             else
               # this should be applying patch.
-              echo "Automatic Patching is disabled for Non-GKI, You should patch your kernel before runing this.
+              echo "Automatic Patching is disabled for Non-GKI, You should patch your kernel before runing this."
             fi
           fi
           echo "::endgroup::"

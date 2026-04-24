@@ -48,7 +48,7 @@ inputs:
   use-gcc:
     default: "false"
 
-  aosp-gcc-android-version:
+  aosp-gcc-branch:
     default: ""
 
   custom-gcc-url:
@@ -121,7 +121,7 @@ runs:
         
         # gcc
         echo "USE_GCC=${{ inputs.use-gcc }}" >> $GITHUB_ENV
-        echo "AOSP_GCC_ANDROID_VERSION=${{ inputs.aosp-gcc-android-version }}" >> $GITHUB_ENV
+        echo "AOSP_GCC_BRANCH=${{ inputs.aosp-gcc-branch }}" >> $GITHUB_ENV
         echo "CUSTOM_GCC_URL=${{ inputs.custom-gcc-url }}" >> $GITHUB_ENV
         echo "CUSTOM_GCC_BRANCH=${{ inputs.custom-gcc-branch }}" >> $GITHUB_ENV
 
@@ -235,10 +235,9 @@ runs:
         echo "::group:: ⚙️ Setup GCC"
         if [[ -z "${CUSTOM_GCC_URL}" ]]; then
           echo "::notice:: Downloading AOSP GCC."
-          if [ -n "${AOSP_GCC_ANDROID_VERSION}" ]; then
+          if [ -n "${AOSP_GCC_BRANCH}" ]; then
             AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9"
             AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9"
-            AOSP_GCC_BRANCH="android${AOSP_GCC_ANDROID_VERSION}-release"
           else
             AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz"
             AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz"
@@ -254,8 +253,8 @@ runs:
         fi
 
         echo "::endgroup::"
-        echo "$PATH"
-        echo $(ls "${PWD}/aosp-gcc-64/bin")
+        #echo "$PATH"
+        #echo $(ls "${PWD}/aosp-gcc-64/bin")
 
     # ----------------------------
     # CCACHE

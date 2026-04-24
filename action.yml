@@ -126,7 +126,7 @@ runs:
         echo "CUSTOM_GCC_BRANCH=${{ inputs.custom-gcc-branch }}" >> $GITHUB_ENV
 
         # cache
-        echo "USE_CACHE=${{ inputs.use-cache}}" >> $GITHUB_ENV
+        echo "USE_CACHE=${{ inputs.use-cache }}" >> $GITHUB_ENV
         echo "SHOW_CACHE_STATS=$${{ inputs.show-cache-stats }}" >> $GITHUB_ENV
 
         # kernelsu
@@ -185,7 +185,7 @@ runs:
         if [[ "$USE_CACHE" == "true" ]]; then
           sudo apt-get install -y ccache
         fi
-        if [[ -n $USE_CLANG ]]; then
+        if [[ -n "$USE_CLANG" ]]; then
           sudo apt-get install -y gcc-aarch64-linux-gnu
           echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
         fi

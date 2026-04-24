@@ -110,7 +110,7 @@ runs:
         echo "ARCH=${{ inputs.arch }}" >> $GITHUB_ENV
 
         echo "INSTALL_COMMANDS=${{ inputs.install-commands }}" >> $GITHUB_ENV
-        echo "EXTENDED_BUILD_COMMANDS=${{ inputs.extended_build_commands }}" >> $GITHUB_ENV
+        echo "EXTENDED_BUILD_COMMANDS=${{ inputs.extended-build-commands }}" >> $GITHUB_ENV
         
         # clang
         echo "USE_CLANG=${{ inputs.use-clang }}" >> $GITHUB_ENV
@@ -144,7 +144,7 @@ runs:
         echo "::endgroup::"
         
         echo "::group:: ⚙️ Saving Functions to functions.sh"
-        echo << 'EOF' > functions.sh
+        cat << 'EOF' > functions.sh
         #!/usr/bin/env bash
 
         # download and extract files supports zip,tar,gz,xz,bz2,git
@@ -180,9 +180,9 @@ runs:
       run: |
         set -euo pipefail
         sudo apt-get update
-        sudo apt-get install --no-install-recommends -y ${INSTALL_COMMANDS}
+        sudo apt-get install --no-install-recommends -y $INSTALL_COMMANDS
 
-        if [[ $USE_CACHE == true ]]; then
+        if [[ "$USE_CACHE" == "true" ]]; then
           sudo apt-get install -y ccache
         fi
         if [[ -n $USE_CLANG ]]; then
@@ -245,10 +245,11 @@ runs:
           fi
           download_and_extract "$AOSP_GCC64_URL" "aosp-gcc-aarch64" "${PWD}/aosp-gcc-64" "$AOSP_GCC_BRANCH"
           download_and_extract "$AOSP_GCC32_URL" "aosp-gcc-arm" "${PWD}/aosp-gcc-32" "$AOSP_GCC_BRANCH"
-          echo "${PWD}/aosp-gcc-64/bin;${PWD}/aosp-gcc-32/bin" >> $GITHUB_PATH
+          echo "${PWD}/aosp-gcc-64/bin" >> $GITHUB_PATH
+          echo "${PWD}/aosp-gcc-32/bin" >> $GITHUB_PATH
         else
           echo "::notice:: Using Custom GCC URL"
-          download_and_extract "$OTHER_GCC64_URL" "custom-gcc" "${PWD}/custom-gcc" "${CUSTOM_GCC_BRANCH}"
+          download_and_extract "$CUSTOM_GCC_URL" "custom-gcc" "${PWD}/custom-gcc" "${CUSTOM_GCC_BRANCH:-main}"
           echo "${PWD}/custom-gcc/bin" >> $GITHUB_PATH
         fi
 
@@ -276,8 +277,8 @@ runs:
         echo "CXX=ccache clang++" >> $GITHUB_ENV
         # echo "HOSTCC=ccache clang" >> $GITHUB_ENV
         # echo "HOSTCXX=ccache clang++" >> $GITHUB_ENV
-        echo "CROSS_COMPILE=ccache aarch64-linux-android-" >> $GITHUB_ENV
-        echo "CROSS_COMPILE_ARM32=ccache arm-linux-androideabi-" >> $GITHUB_ENV
+        # echo "CROSS_COMPILE=ccache aarch64-linux-android-" >> $GITHUB_ENV
+        # echo "CROSS_COMPILE_ARM32=ccache arm-linux-androideabi-" >> $GITHUB_ENV
 
     # ----------------------------
     # CLONE KERNEL
@@ -303,8 +304,8 @@ runs:
       run: |
         set -euo pipefail
         cd target-kernel
-        if [[ $KSU_VERSION -eq "" ]]; then
-          curl -fsSL "$KSU_URL_SETUP" | bash -
+        if [[ -z "$KSU_VERSION" ]]; then
+          curl -fsSL "$KSU_URL_SETUP" | bash
         else
           curl -fsSL "$KSU_URL_SETUP" | bash -s "$KSU_VERSION"
         fi
@@ -319,8 +320,9 @@ runs:
       run: |
         set -euo pipefail
         cd target-kernel
-
-        make -j$(nproc --all) $DEFCONFIG $EXTENDED_BUILD_COMMANDS O=out # ARCH,CROSS_COMPILE,CROSS_COMPILE_ARM32,CLANG_TRIPLE is in $GITHUB_ENV
+        
+        # ARCH,CROSS_COMPILE,CROSS_COMPILE_ARM32,CLANG_TRIPLE is in $GITHUB_ENV
+        make -j$(nproc --all) $DEFCONFIG $EXTENDED_BUILD_COMMANDS O=out
 
     # ----------------------------
     # PACKAGE OUTPUTS (UNIFIED)

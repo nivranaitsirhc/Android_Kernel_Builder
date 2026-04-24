@@ -558,7 +558,8 @@ runs:
             if grep -q "CONFIG_KPROBES=y" "arch/${{ inputs.arch }}/configs/${{ inputs.defconfig }}" ; then
               echo "CONFIG_KPROBES is enabled, skip patch."
             else
-              curl -SsL https://github.com/dabao1955/kernel_build_action/raw/main/kernelsu/apply_cocci.sh | bash
+              # this should be applying patch.
+              echo "Automatic Patching is disabled for Non-GKI, You should patch your kernel before runing this.
             fi
           fi
           echo "::endgroup::"

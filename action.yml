@@ -368,12 +368,10 @@ runs:
       shell: bash
       run: |
         # These are your specific kernel-building tweaks
-        ccache -o cache_dir_levels=2
         ccache -o compiler_check=content
         ccache -o compression=true
         ccache -o compression_level=6
         ccache -o sloppiness=time_macros
-        ccache -o cpp2=true
         ccache -z # Reset stats for this run
 
         echo "CCACHE_NOHASHDIR=1" >> $GITHUB_ENV

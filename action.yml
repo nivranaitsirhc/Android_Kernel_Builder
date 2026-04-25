@@ -443,21 +443,22 @@ runs:
         
         # Silence the warning that breaks version detection
         export ANDROID_SILENT_DEPRECATION=true
+        
         export LLVM=1
         export LLVM_IAS=1
         export KBUILD_BUILD_TIMESTAMP="1970-01-01 00:00:00"
 
         # re-export all ENV vars in GITHUB_ENV to this shell
-        export $(grep -v '^#' $GITHUB_ENV | xargs -d '\n')
+        # export $(grep -v '^#' $GITHUB_ENV | xargs -d '\n')
 
-        echo "::notice:: env PATH ${PATH}"
-        echo "::notice:: env CC ${CC}"
-        echo "::notice:: env CXX ${CXX}"
-        echo "::notice:: env CLANG_TRIPLE ${CLANG_TRIPLE}"
-        echo "::notice:: env CROSS_COMPILE ${CROSS_COMPILE}"
-        echo "::notice:: env CROSS_COMPILE_ARM32 ${CROSS_COMPILE_ARM32}"
+        # echo "::notice:: env PATH ${PATH}"
+        # echo "::notice:: env CC ${CC}"
+        # echo "::notice:: env CXX ${CXX}"
+        # echo "::notice:: env CLANG_TRIPLE ${CLANG_TRIPLE}"
+        # echo "::notice:: env CROSS_COMPILE ${CROSS_COMPILE}"
+        # echo "::notice:: env CROSS_COMPILE_ARM32 ${CROSS_COMPILE_ARM32}"
         
-        echo "::notice:: checking clang version $($CC --version | head -n1)"
+        # echo "::notice:: checking clang version $($CC --version | head -n1)"
         
         echo "::notice:: Verifying config file ${DEFCONFIG}"
         check_defconfig DEFCONFIG "$ARCH"

@@ -6,7 +6,9 @@ branding:
   color: "blue"
 
 inputs:
-
+  build-dir:
+    default: "target-kernel"
+    
   clone-depth:
     default: "1"
 
@@ -25,7 +27,7 @@ inputs:
     required: true
 
   install-commands:
-    default: binutils git make bc bison openssl curl zip kmod cpio flex libelf-dev libssl-dev libtfm-dev libc6-dev device-tree-compiler ca-certificates python3 xz-utils libc6-dev aria2 build-essential pigz coccinelle parallel
+    default: binutils git make bc bison openssl curl zip kmod cpio flex libelf-dev libssl-dev libtfm-dev libc6-dev device-tree-compiler ca-certificates python3 xz-utils aria2 build-essential pigz coccinelle parallel
 
   extended-build-commands:
     default: ""
@@ -87,7 +89,7 @@ inputs:
   use-anykernel3:
     default: "false"
 
-  release:
+  use-release:
     default: "false"
 
   release-name:
@@ -111,10 +113,12 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        mkdir -p build
 
+        mkdir -p "${{ inputs.build-dir }}"
+        
         echo "::group:: ⚙️ Saving Inputs to GITHUB_ENV"
         # kernel build
+        echo "BUILD_DIR=${{ inputs.build-dir }}" >> $GITHUB_ENV
         echo "CLONE_DEPTH=${{ inputs.clone-depth }}" >> $GITHUB_ENV
         echo "KERNEL_URL=${{ inputs.kernel-url }}" >> $GITHUB_ENV
         echo "KERNEL_BRANCH=${{ inputs.kernel-branch }}" >> $GITHUB_ENV
@@ -152,9 +156,6 @@ runs:
         echo "KSU_URL_SETUP=${{ inputs.ksu-url-setup }}" >> $GITHUB_ENV
         echo "KSU_VERSION=${{ inputs.ksu-version }}" >> $GITHUB_ENV
 
-        # anykernel
-        echo "USE_ANYKERNEL=${{ inputs.use-anykernel }}" >> $GITHUB_ENV
-
         # release
         echo "USE_RELEASE=${{ inputs.use-release }}" >> $GITHUB_ENV
         echo "RELEASE_NAME=${{ inputs.release-name }}" >> $GITHUB_ENV
@@ -189,52 +190,6 @@ runs:
           esac
         }
         
-        flatten_to_bin() {
-          local target_dir="$1"
-          local bin_dir="$target_dir/bin"
-        
-          # 1. Setup & Validation
-          if [[ ! -d "$target_dir" ]]; then
-              echo "::error::Target directory '$target_dir' not found."
-              return 1
-          fi
-          mkdir -p "$bin_dir"
-        
-          echo "::notice::Flattening executables into $bin_dir..."
-        
-          # 2. Find all executables (ignoring the new bin folder itself to avoid loops)
-          # -L handles symlinks properly during search
-          find -L "$target_dir" -not -path "$bin_dir*" -type f -executable | while read -r item; do
-              local name=$(basename "$item")
-              local dest="$bin_dir/$name"
-        
-              # 3. Negotiate Links: Point to the filename in the same folder
-              # Since we are flattening everything, both link and target will live here.
-              if [[ -L "$item" ]]; then
-                  ln -sf "$name" "$dest"
-                  continue
-              fi
-        
-              # 4. Negotiate Duplicates (Same name, different content)
-              if [[ -f "$dest" ]]; then
-                  if cmp -s "$item" "$dest"; then
-                      # Files are identical, just delete the redundant copy
-                      rm "$item"
-                      continue
-                  else
-                      # Same name but different content - append a suffix
-                      echo "::warning::Naming collision for $name. Renaming to ${name}_alt"
-                      dest="${dest}_alt"
-                  fi
-              fi
-        
-              # 5. Move the binary
-              mv "$item" "$dest"
-          done
-        
-          # 6. Cleanup empty folders
-          find "$target_dir" -mindepth 1 -type d -empty -not -path "$bin_dir*" -delete
-        }
         check_defconfig() {
           local -n defconfig_ref="$1"   # <-- reference to caller variable
           local arch="$2"
@@ -284,6 +239,18 @@ runs:
         echo "::endgroup::"
 
     # ----------------------------
+    # RESTORE CCACHE
+    # ----------------------------
+    - name: Restore ccache
+      if: inputs.use-ccache == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ~/.ccache
+        key: ccache-${{ runner.os }}-${{ github.sha }}
+        restore-keys: |
+          ccache-${{ runner.os }}-
+    
+    # ----------------------------
     # DEPENDENCIES
     # ----------------------------
     - name: Install dependencies
@@ -296,7 +263,7 @@ runs:
         if [[ "$USE_CCACHE" == "true" ]]; then
           sudo apt-get install -y ccache
         fi
-        if [[ -n "$USE_CLANG" ]]; then
+        if [[ "$USE_CLANG" == "true" ]]; then
           sudo apt-get install -y gcc-aarch64-linux-gnu
           echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
         fi
@@ -370,15 +337,13 @@ runs:
           
           if [[ -n "$CUSTOM_GCC64_URL" && -n "$CUSTOM_GCC64_BRANCH" ]]; then
             echo "::notice:: Using Custom GCC 64 URL - ${CUSTOM_GCC64_URL}"
-            download_and_extract "$CUSTOM_GCC64_URL" "custom-gcc-64" "${PWD}/custom-gcc" "${CUSTOM_GCC64_BRANCH:-main}"
-            flatten_to_bin "${PWD}/custom-gcc-64"
+            download_and_extract "$CUSTOM_GCC64_URL" "custom-gcc-64" "${PWD}/custom-gcc-64" "${CUSTOM_GCC64_BRANCH:-main}"
             echo "${PWD}/custom-gcc-64/bin" >> $GITHUB_PATH
           fi
           
           if [[ -n "$CUSTOM_GCC32_URL" && -n "$CUSTOM_GCC32_BRANCH" ]]; then
             echo "::notice:: Using Custom GCC 32 URL - ${CUSTOM_GCC32_URL}"
-            download_and_extract "$CUSTOM_GCC64_URL" "custom-gcc-32" "${PWD}/custom-gcc" "${CUSTOM_GCC32_BRANCH:-main}"
-            flatten_to_bin "${PWD}/custom-gcc-32"
+            download_and_extract "$CUSTOM_GCC32_URL" "custom-gcc-32" "${PWD}/custom-gcc-32" "${CUSTOM_GCC32_BRANCH:-main}"
             echo "${PWD}/custom-gcc-32/bin" >> $GITHUB_PATH
           fi
         fi
@@ -386,29 +351,41 @@ runs:
         echo "::endgroup::"
 
     # ----------------------------
-    # CCACHE
+    # SETUP CCACHE
     # ----------------------------
     - name: Setup ccache
       if: inputs.use-ccache == 'true'
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ${{ runner.os }}-kernel-build
+        max-size: 10G
+        # This automatically sets CCACHE_DIR and handles the save/restore logic
+        append-timestamp: true 
+
+
+    - name: Configure ccache Environment
+      if: inputs.use-ccache == 'true'
       shell: bash
       run: |
-        set -euo pipefail
+        # These are your specific kernel-building tweaks
+        ccache -o cache_dir_levels=2
+        ccache -o compiler_check=content
+        ccache -o compression=true
+        ccache -o compression_level=6
+        ccache -o sloppiness=time_macros
+        ccache -o cpp2=true
+        ccache -z # Reset stats for this run
 
-        export CCACHE_DIR="$HOME/.ccache"
-        export CCACHE_BASEDIR="$GITHUB_WORKSPACE"
+        echo "CCACHE_NOHASHDIR=1" >> $GITHUB_ENV
+        echo "CCACHE_BASEDIR=${GITHUB_WORKSPACE}/${BUILD_DIR}" >> $GITHUB_ENV
 
-        mkdir -p "$CCACHE_DIR"
-
-        ccache -M 10G
-        ccache -z
-
-        echo "CCACHE_DIR=$CCACHE_DIR" >> $GITHUB_ENV
+        # Export variables for the 'make' command
         echo "CC=ccache clang" >> $GITHUB_ENV
         echo "CXX=ccache clang++" >> $GITHUB_ENV
-        # echo "HOSTCC=ccache clang" >> $GITHUB_ENV
-        # echo "HOSTCXX=ccache clang++" >> $GITHUB_ENV
-        # echo "CROSS_COMPILE=ccache aarch64-linux-android-" >> $GITHUB_ENV
-        # echo "CROSS_COMPILE_ARM32=ccache arm-linux-androideabi-" >> $GITHUB_ENV
+        echo "HOSTCC=ccache gcc" >> $GITHUB_ENV
+        echo "HOSTCXX=ccache g++" >> $GITHUB_ENV
+        # Based on our previous discussion, you may want these too:
+        echo "CROSS_COMPILE=ccache aarch64-linux-android-" >> $GITHUB_ENV
 
     # ----------------------------
     # CLONE KERNEL
@@ -422,7 +399,7 @@ runs:
           --depth=$CLONE_DEPTH \
           -b "$KERNEL_BRANCH" \
           "$KERNEL_URL" \
-          target-kernel
+          "${BUILD_DIR}"
 
     # ----------------------------
     # KERNELSU
@@ -432,7 +409,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        cd target-kernel
+        cd "${BUILD_DIR}"
         if [[ -z "$KSU_VERSION" ]]; then
           echo "::notice:: Using ${KSU_URL_SETUP}"
           curl -fsSL "$KSU_URL_SETUP" | bash
@@ -441,7 +418,7 @@ runs:
           curl -fsSL "$KSU_URL_SETUP" | bash -s "$KSU_VERSION"
         fi
 
-        DEFCONFIG_PATH="arch/arm64/configs/${{ inputs.defconfig }}"
+        DEFCONFIG_PATH="arch/${ARCH}/configs/${{ inputs.defconfig }}"
 
         echo "::notice:: Enabling KernelSU in ${DEFCONFIG_PATH}"
         
@@ -471,12 +448,16 @@ runs:
       run: |
         set -euo pipefail
         source "$GITHUB_WORKSPACE/functions.sh"
-        cd target-kernel
+        cd "${BUILD_DIR}"
         
         # Silence the warning that breaks version detection
         export ANDROID_SILENT_DEPRECATION=true
         export LLVM=1
         export LLVM_IAS=1
+        export KBUILD_BUILD_TIMESTAMP="1970-01-01 00:00:00"
+
+        # re-export all ENV vars in GITHUB_ENV to this shell
+        export $(grep -v '^#' $GITHUB_ENV | xargs -d '\n')
 
         echo "::notice:: env PATH ${PATH}"
         echo "::notice:: env CC ${CC}"
@@ -488,7 +469,7 @@ runs:
         echo "::notice:: checking clang version $($CC --version | head -n1)"
         
         echo "::notice:: Verifying config file ${DEFCONFIG}"
-        check_defconfig DEFCONFIG "${ARCH}" ||  exit
+        check_defconfig DEFCONFIG "$ARCH"
         
         echo "::notice:: Configuring Kernel with $DEFCONFIG"
         # Configuration Phase
@@ -505,7 +486,7 @@ runs:
              CLANG_TRIPLE="${CLANG_TRIPLE}" \
              CROSS_COMPILE="${CROSS_COMPILE}" \
              CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" \
-             ${EXTENDED_BUILD_COMMANDS} olddefconfig
+             ${EXTENDED_BUILD_COMMANDS}
         
         echo "::notice:: Starting Compilation"
         # Build Phase
@@ -513,8 +494,7 @@ runs:
              CC="${CC}" CXX="${CXX}" \
              CLANG_TRIPLE="${CLANG_TRIPLE}" \
              CROSS_COMPILE="${CROSS_COMPILE}" \
-             CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" \
-             ${EXTENDED_BUILD_COMMANDS}
+             CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" 
 
     # ----------------------------
     # CACHE Stats
@@ -525,55 +505,155 @@ runs:
       run: ccache -s
 
     # ----------------------------
-    # PACKAGE OUTPUTS (UNIFIED)
+    # PACKAGE OUTPUTS (UNIFIED + SAFE)
     # ----------------------------
     - name: Prepare artifacts
       shell: bash
       run: |
         set -euo pipefail
         mkdir -p build
-
-        KERNEL_OUT="target-kernel/out/arch/$ARCH/boot"
-
-        if [ -z "$(find "${KERNEL_OUT}" -maxdepth 0 -empty)" ]; then
-          echo "::error:: Missing Kernel Image at ${KERNEL_OUT}!"
+    
+        KERNEL_OUT="${BUILD_DIR}/out/arch/$ARCH/boot"
+    
+        echo "::notice:: Checking kernel output in ${KERNEL_OUT}"
+    
+        # ----------------------------
+        # 1. Resolve kernel image (robust across kernels)
+        # ----------------------------
+        KERNEL_IMAGE=$(find "$KERNEL_OUT" -maxdepth 1 -type f \
+          \( \
+            -name "Image" \
+            -o -name "Image.gz" \
+            -o -name "Image.gz-dtb" \
+            -o -name "Image-dtb" \
+            -o -name "Image.lz4" \
+            -o -name "Image.lz4-dtb" \
+          \) | head -n 1)
+    
+        if [[ -z "$KERNEL_IMAGE" ]]; then
+          echo "::error:: No kernel image found in $KERNEL_OUT"
+          echo "::error:: Expected Image*, but directory contents are:"
+          ls -lah "$KERNEL_OUT" || true
           exit 1
         fi
-
-        echo "::notice:: Copying kernel image"
-        if ls $KERNEL_OUT/Image* 1> /dev/null 2>&1; then
-          cp $KERNEL_OUT/Image* build/
+    
+        echo "::notice:: Found kernel image: $(basename "$KERNEL_IMAGE")"
+    
+        # ----------------------------
+        # 2. Copy kernel image
+        # ----------------------------
+        cp "$KERNEL_IMAGE" build/
+    
+        # ----------------------------
+        # 3. Copy DTB / DTBO if present
+        # ----------------------------
+        if [[ -f "$KERNEL_OUT/dtb" ]]; then
+          cp "$KERNEL_OUT/dtb" build/
+          echo "::notice:: Copied dtb"
         fi
-
-        # Copy dtb/dtbo if exist
-        [ -f "$KERNEL_OUT/dtb" ] && cp "$KERNEL_OUT/dtb" build/ || true
-        [ -f "$KERNEL_OUT/dtbo.img" ] && cp "$KERNEL_OUT/dtbo.img" build/ || true
+    
+        if [[ -f "$KERNEL_OUT/dtbo.img" ]]; then
+          cp "$KERNEL_OUT/dtbo.img" build/
+          echo "::notice:: Copied dtbo.img"
+        fi
+    
+        echo "::notice:: Artifact preparation complete"
 
     # ----------------------------
-    # ANYKERNEL3 PACKAGING
+    # ANYKERNEL3 PACKAGING (SMART + AUTO)
     # ----------------------------
     - name: Package AnyKernel3
       if: inputs.use-anykernel3 == 'true'
       shell: bash
       run: |
         set -euo pipefail
-
-        git clone https://github.com/osm0sis/AnyKernel3.git ak3
-
-        cp build/* ak3/ || true
-
-        cd ak3
-
-        zip -r "../${RELEASE_NAME}.zip" ./*
-
+    
+        echo "::group:: AnyKernel3 Packaging"
+    
+        AK3_DIR="ak3"
+        KERNEL_OUT="${BUILD_DIR}/out/arch/$ARCH/boot"
+    
+        # ----------------------------
+        # 1. Clone AnyKernel3
+        # ----------------------------
+        git clone https://github.com/osm0sis/AnyKernel3.git "$AK3_DIR"
+    
+        # ----------------------------
+        # 2. Detect kernel image
+        # ----------------------------
+        KERNEL_IMAGE=$(find "$KERNEL_OUT" -maxdepth 1 -type f \
+          \( -name "Image*" -o -name "Image.lz4*" \) | head -n 1)
+    
+        if [[ -z "$KERNEL_IMAGE" ]]; then
+          echo "::error:: No kernel image found for AnyKernel packaging"
+          exit 1
+        fi
+    
+        echo "::notice:: Using kernel image: $(basename "$KERNEL_IMAGE")"
+    
+        # Copy kernel image into AnyKernel3 root
+        cp "$KERNEL_IMAGE" "$AK3_DIR/"
+    
+        # ----------------------------
+        # 3. Handle DTB / DTBO intelligently
+        # ----------------------------
+    
+        # Case A: separate dtb file
+        if [[ -f "$KERNEL_OUT/dtb" ]]; then
+          echo "::notice:: Including dtb"
+          cp "$KERNEL_OUT/dtb" "$AK3_DIR/"
+        fi
+    
+        # Case B: dtbo image
+        if [[ -f "$KERNEL_OUT/dtbo.img" ]]; then
+          echo "::notice:: Including dtbo.img"
+          cp "$KERNEL_OUT/dtbo.img" "$AK3_DIR/"
+        fi
+    
+        # Case C: inline dtb kernel (Image.gz-dtb)
+        if [[ "$KERNEL_IMAGE" == *"dtb"* ]]; then
+          echo "::notice:: Detected inline DTB kernel (no separate dtb needed)"
+        fi
+    
+        # ----------------------------
+        # 4. Auto-generate ZIP name
+        # ----------------------------
+        KERNEL_NAME="${RELEASE_NAME}"
+    
+        if [[ "$USE_KSU" == "true" ]]; then
+          KERNEL_NAME="${KERNEL_NAME}-ksu"
+        fi
+    
+        if [[ "$KERNEL_IMAGE" == *"lz4"* ]]; then
+          KERNEL_NAME="${KERNEL_NAME}-lz4"
+        elif [[ "$KERNEL_IMAGE" == *"gz"* ]]; then
+          KERNEL_NAME="${KERNEL_NAME}-gz"
+        fi
+    
+        ZIP_NAME="${KERNEL_NAME}.zip"
+    
+        echo "::notice:: Packaging as ${ZIP_NAME}"
+    
+        # ----------------------------
+        # 5. Create flashable zip
+        # ----------------------------
+        cd "$AK3_DIR"
+        zip -r "../$ZIP_NAME" ./*
+    
         cd ..
-        mv "${RELEASE_NAME}.zip" build/
+    
+        # ----------------------------
+        # 6. Move artifact
+        # ----------------------------
+        mv "$ZIP_NAME" build/
+    
+        echo "::endgroup::"
 
     # ----------------------------
     # ARTIFACT UPLOAD
     # ----------------------------
     - name: Upload kernel artifacts
-      if: inputs.release == 'false'
+      if: inputs.use-release == 'false' && inputs.use-anykernel3 == 'false'
       uses: actions/upload-artifact@v4
       with:
         name: kernel-build
@@ -583,7 +663,7 @@ runs:
     # ARTIFACT UPLOAD WITH ANYKERNEL
     # ----------------------------
     - name: Upload AnyKernel3 artifacts
-      if: inputs.release == 'false' && inputs.use-anykernel3 == 'true'
+      if: inputs.use-release == 'false' && inputs.use-anykernel3 == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: anykernel3-package
@@ -593,7 +673,7 @@ runs:
     # RELEASE
     # ----------------------------
     - name: Create Release
-      if: inputs.release == 'true'
+      if: inputs.use-release == 'true'
       uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ inputs.access-token }}

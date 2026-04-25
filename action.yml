@@ -119,6 +119,7 @@ runs:
         echo "EXTENDED_BUILD_COMMANDS=${{ inputs.extended-build-commands }}" >> $GITHUB_ENV
         
         # clang
+        echo "USE_CLANG=${{ inputs.use-clang }}" >> $GITHUB_ENV
         echo "USE_AOSP_CLANG=${{ inputs.use-aosp-clang }}" >> $GITHUB_ENV
         echo "AOSP_CLANG_BRANCH=${{ inputs.aosp-clang-branch }}" >> $GITHUB_ENV
         echo "AOSP_CLANG_DEFAULT_BRANCH=main-kernel" >> $GITHUB_ENV

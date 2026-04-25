@@ -186,6 +186,54 @@ runs:
               ;;
           esac
         }
+        
+        flatten_to_bin() {
+          local target_dir="$1"
+          local bin_dir="$target_dir/bin"
+      
+          # 1. Setup & Validation
+          if [[ ! -d "$target_dir" ]]; then
+              echo "::error::Target directory '$target_dir' not found."
+              return 1
+          fi
+          mkdir -p "$bin_dir"
+      
+          echo "::notice::Flattening executables into $bin_dir..."
+      
+          # 2. Find all executables (ignoring the new bin folder itself to avoid loops)
+          find "$target_dir" -not -path "$bin_dir*" -type f -executable -o -type l -executable | while read -r item; do
+              local name=$(basename "$item")
+              local dest="$bin_dir/$name"
+      
+              # 3. Negotiate Links
+              if [[ -L "$item" ]]; then
+                  local target=$(readlink "$item")
+                  # Create a new relative link in the bin folder
+                  # Note: This assumes the actual binary will also be moved to bin/
+                  ln -sf "$target" "$dest"
+                  continue
+              fi
+      
+              # 4. Negotiate Duplicates (Same name, different content)
+              if [[ -f "$dest" && ! -L "$dest" ]]; then
+                  if cmp -s "$item" "$dest"; then
+                      # Files are identical, just delete the redundant copy
+                      rm "$item"
+                      continue
+                  else
+                      # Same name but different content - append a suffix
+                      echo "::warning::Naming collision for $name. Renaming to ${name}_alt"
+                      dest="${dest}_alt"
+                  fi
+              fi
+      
+              # 5. Move the binary
+              mv "$item" "$dest"
+          done
+      
+          # 6. Cleanup empty folders (Optional)
+          find "$target_dir" -mindepth 1 -type d -empty -not -path "$bin_dir*" -delete
+        }
         EOF
         chmod +x functions.sh
         echo "::endgroup::"
@@ -231,10 +279,12 @@ runs:
             AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/mirror-goog-main-llvm-toolchain-source/${AOSP_CLANG_DEFAULT_VERSION}.tar.gz"
           fi
           download_and_extract "$AOSP_CLANG_URL" "aosp-clang" "${PWD}/aosp-clang"
+          flatten_to_bin "${PWD}/aosp-clang"
           echo "${PWD}/aosp-clang/bin" >> $GITHUB_PATH
         else
           echo "::notice:: Using Custom Clang URL with ${CUSTOM_CLANG_BRANCH}"
           download_and_extract "${CUSTOM_CLANG_URL}" "custom-clang" "${PWD}/custom-clang" "${CUSTOM_CLANG_BRANCH}"
+          flatten_to_bin "${PWD}/custom-clang"
           echo "${PWD}/custom-clang/bin" >> $GITHUB_PATH
         fi
         echo "::endgroup::"
@@ -269,6 +319,8 @@ runs:
           
           download_and_extract "$AOSP_GCC64_URL" "aosp-gcc-aarch64" "${PWD}/aosp-gcc-64" "$AOSP_GCC_BRANCH"
           download_and_extract "$AOSP_GCC32_URL" "aosp-gcc-arm" "${PWD}/aosp-gcc-32" "$AOSP_GCC_BRANCH"
+          flatten_to_bin "${PWD}/aosp-gcc-64"
+          flatten_to_bin "${PWD}/aosp-gcc-32"
           echo "${PWD}/aosp-gcc-64/bin" >> $GITHUB_PATH
           echo "${PWD}/aosp-gcc-32/bin" >> $GITHUB_PATH
           
@@ -278,12 +330,14 @@ runs:
           if [[ -n "$CUSTOM_GCC64_URL" && -n "$CUSTOM_GCC64_BRANCH" ]]; then
             echo "::notice:: Using Custom GCC 64 URL - ${CUSTOM_GCC64_URL}"
             download_and_extract "$CUSTOM_GCC64_URL" "custom-gcc-64" "${PWD}/custom-gcc" "${CUSTOM_GCC64_BRANCH:-main}"
+            flatten_to_bin "${PWD}/custom-gcc-64"
             echo "${PWD}/custom-gcc-64/bin" >> $GITHUB_PATH
           fi
           
           if [[ -n "$CUSTOM_GCC32_URL" && -n "$CUSTOM_GCC32_BRANCH" ]]; then
             echo "::notice:: Using Custom GCC 32 URL - ${CUSTOM_GCC32_URL}"
             download_and_extract "$CUSTOM_GCC64_URL" "custom-gcc-32" "${PWD}/custom-gcc" "${CUSTOM_GCC32_BRANCH:-main}"
+            flatten_to_bin "${PWD}/custom-gcc-32"
             echo "${PWD}/custom-gcc-32/bin" >> $GITHUB_PATH
           fi
         fi
@@ -377,12 +431,9 @@ runs:
         set -euo pipefail
         cd target-kernel
 
-        echo "::notice:: Updating .config from ${DEFCONFIG}"
-        make O=out "${DEFCONFIG}"
-
         echo "::notice:: Starting Kernel Build"
         # ARCH,CROSS_COMPILE,CROSS_COMPILE_ARM32,CLANG_TRIPLE is in $GITHUB_ENV
-        make -j$(nproc --all) O=out $EXTENDED_BUILD_COMMANDS
+        make -j$(nproc --all) "${DEFCONFIG}" O=out $EXTENDED_BUILD_COMMANDS
 
     # ----------------------------
     # CACHE Stats

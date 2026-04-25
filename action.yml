@@ -25,7 +25,7 @@ inputs:
     required: true
 
   install-commands:
-    default: "binutils git make bc bison openssl curl zip kmod cpio flex libelf-dev libssl-dev libtfm-dev libc6-dev device-tree-compiler ca-certificates python3 xz-utils libc6-dev aria2 build-essential pigz coccinelle parallel"
+    default: binutils git make bc bison openssl curl zip kmod cpio flex libelf-dev libssl-dev libtfm-dev libc6-dev device-tree-compiler ca-certificates python3 xz-utils libc6-dev aria2 build-essential pigz coccinelle parallel
 
   extended-build-commands:
     default: ""
@@ -174,7 +174,7 @@ runs:
               tar -C "$extract_dir" -xf "${output_name}.${url##*.}"
               ;;
             *)
-              git clone "$url" "$extract_dir" --depth=${{ inputs.clone-depth }} -b "$branch"
+              git clone "$url" "$extract_dir" --depth=${CLONE_DEPTH} -b "$branch"
               ;;
           esac
         }
@@ -357,11 +357,11 @@ runs:
         cd target-kernel
 
         echo "::notice:: Updating .config from ${DEFCONFIG}"
-        make "${DEFCONFIG}"
+        make O=out "${DEFCONFIG}"
 
         echo "::notice:: Starting Kernel Build"
         # ARCH,CROSS_COMPILE,CROSS_COMPILE_ARM32,CLANG_TRIPLE is in $GITHUB_ENV
-        make -j$(nproc --all) $DEFCONFIG $EXTENDED_BUILD_COMMANDS O=out
+        make -j$(nproc --all) O=out $EXTENDED_BUILD_COMMANDS
 
     # ----------------------------
     # CACHE Stats
@@ -411,10 +411,10 @@ runs:
 
         cd ak3
 
-        zip -r "../${{ inputs.release-name }}.zip" ./*
+        zip -r "../${RELEASE_NAME}.zip" ./*
 
         cd ..
-        mv "${{ inputs.release-name }}.zip" build/
+        mv "${RELEASE_NAME}.zip" build/
 
     # ----------------------------
     # ARTIFACT UPLOAD

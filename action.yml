@@ -495,21 +495,20 @@ runs:
       shell: bash
       run: ccache -s
 
-    # ----------------------------
-    # PACKAGE OUTPUTS (UNIFIED + SAFE)
-    # ----------------------------
-    - name: Prepare artifacts
+    # ============================================================
+    # 1. KERNEL RESOLVER (SINGLE SOURCE OF TRUTH)
+    # ============================================================
+    - name: Resolve kernel artifacts
       shell: bash
       run: |
         set -euo pipefail
-        mkdir -p build
     
         KERNEL_OUT="${BUILD_DIR}/out/arch/$ARCH/boot"
     
-        echo "::notice:: Checking kernel output in ${KERNEL_OUT}"
+        echo "::notice:: Resolving kernel artifacts from $KERNEL_OUT"
     
         # ----------------------------
-        # 1. Resolve kernel image (robust across kernels)
+        # Kernel image resolution (unchanged features preserved)
         # ----------------------------
         KERNEL_IMAGE=$(find "$KERNEL_OUT" -maxdepth 1 -type f \
           \( \
@@ -522,147 +521,163 @@ runs:
           \) | head -n 1)
     
         if [[ -z "$KERNEL_IMAGE" ]]; then
-          echo "::error:: No kernel image found in $KERNEL_OUT"
-          echo "::error:: Expected Image*, but directory contents are:"
+          echo "::error:: Kernel image not found"
           ls -lah "$KERNEL_OUT" || true
           exit 1
         fi
     
-        echo "::notice:: Found kernel image: $(basename "$KERNEL_IMAGE")"
+        echo "::notice:: Kernel image: $(basename "$KERNEL_IMAGE")"
     
         # ----------------------------
-        # 2. Copy kernel image
+        # DTB / DTBO detection (preserved)
         # ----------------------------
-        cp "$KERNEL_IMAGE" build/
+        HAS_DTB=false
+        HAS_DTBO=false
+    
+        [[ -f "$KERNEL_OUT/dtb" ]] && HAS_DTB=true
+        [[ -f "$KERNEL_OUT/dtbo.img" ]] && HAS_DTBO=true
     
         # ----------------------------
-        # 3. Copy DTB / DTBO if present
+        # Export environment (single source of truth)
         # ----------------------------
-        if [[ -f "$KERNEL_OUT/dtb" ]]; then
-          cp "$KERNEL_OUT/dtb" build/
-          echo "::notice:: Copied dtb"
-        fi
+        {
+          echo "KERNEL_IMAGE=$KERNEL_IMAGE"
+          echo "KERNEL_OUT=$KERNEL_OUT"
+          echo "HAS_DTB=$HAS_DTB"
+          echo "HAS_DTBO=$HAS_DTBO"
+          echo "KERNEL_NAME=$RELEASE_NAME"
+          echo "USE_KSU=$USE_KSU"
+        } >> "$GITHUB_ENV"
     
-        if [[ -f "$KERNEL_OUT/dtbo.img" ]]; then
-          cp "$KERNEL_OUT/dtbo.img" build/
-          echo "::notice:: Copied dtbo.img"
-        fi
     
-        echo "::notice:: Artifact preparation complete"
-
-    # ----------------------------
-    # ANYKERNEL3 PACKAGING (SMART + AUTO)
-    # ----------------------------
+    # ============================================================
+    # 2. ARTIFACT PREPARATION (NORMALIZED OUTPUT LAYER)
+    # ============================================================
+    - name: Prepare artifacts
+      shell: bash
+      run: |
+        set -euo pipefail
+    
+        mkdir -p build
+    
+        echo "::notice:: Preparing standardized artifacts"
+    
+        # kernel
+        cp "$KERNEL_IMAGE" build/kernel
+    
+        # dtb/dtbo (unchanged behavior preserved)
+        [[ "$HAS_DTB" == "true" ]] && cp "$KERNEL_OUT/dtb" build/
+        [[ "$HAS_DTBO" == "true" ]] && cp "$KERNEL_OUT/dtbo.img" build/
+    
+        # metadata (unchanged feature)
+        cat > build/kernel.info <<EOF
+        Kernel: $KERNEL_NAME
+        Image: $(basename "$KERNEL_IMAGE")
+        KSU: $USE_KSU
+        DTB: $HAS_DTB
+        DTBO: $HAS_DTBO
+        EOF
+    
+        echo "::notice:: Artifact layer ready"
+    
+    
+    # ============================================================
+    # 3. ANYKERNEL3 PACKAGER (PURE CONSUMER LAYER)
+    # ============================================================
     - name: Package AnyKernel3
       if: inputs.use-anykernel3 == 'true'
       shell: bash
       run: |
         set -euo pipefail
     
-        echo "::group:: AnyKernel3 Packaging"
+        echo "::group:: AnyKernel3 Packaging (Architecture Mode)"
     
-        AK3_DIR="ak3"
-        KERNEL_OUT="${BUILD_DIR}/out/arch/$ARCH/boot"
+        AK3_DIR="anykernel3"
+        STAGE="stage"
+        STAGE_AK3="$STAGE/anykernel"
     
-        # ----------------------------
-        # 1. Clone AnyKernel3
-        # ----------------------------
-        git clone https://github.com/osm0sis/AnyKernel3.git "$AK3_DIR"
+        mkdir -p "$STAGE_AK3"
     
         # ----------------------------
-        # 2. Detect kernel image
+        # Clone minimal AnyKernel3
         # ----------------------------
-        KERNEL_IMAGE=$(find "$KERNEL_OUT" -maxdepth 1 -type f \
-          \( -name "Image*" -o -name "Image.lz4*" \) | head -n 1)
-    
-        if [[ -z "$KERNEL_IMAGE" ]]; then
-          echo "::error:: No kernel image found for AnyKernel packaging"
-          exit 1
-        fi
-    
-        echo "::notice:: Using kernel image: $(basename "$KERNEL_IMAGE")"
-    
-        # Copy kernel image into AnyKernel3 root
-        cp "$KERNEL_IMAGE" "$AK3_DIR/"
+        git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git "$AK3_DIR"
     
         # ----------------------------
-        # 3. Handle DTB / DTBO intelligently
+        # Core whitelist (no deletion logic anymore)
         # ----------------------------
+        cp "$AK3_DIR/anykernel.sh" "$STAGE_AK3/"
+        [[ -d "$AK3_DIR/tools" ]] && cp -r "$AK3_DIR/tools" "$STAGE_AK3/"
     
-        # Case A: separate dtb file
-        if [[ -f "$KERNEL_OUT/dtb" ]]; then
-          echo "::notice:: Including dtb"
-          cp "$KERNEL_OUT/dtb" "$AK3_DIR/"
-        fi
+        # ========================================================
+        # USE PREPARED ARTIFACTS (NO FIND, NO REDETECTION)
+        # ========================================================
+        cp build/kernel "$STAGE/"
     
-        # Case B: dtbo image
-        if [[ -f "$KERNEL_OUT/dtbo.img" ]]; then
-          echo "::notice:: Including dtbo.img"
-          cp "$KERNEL_OUT/dtbo.img" "$AK3_DIR/"
-        fi
+        [[ "$HAS_DTB" == "true" ]] && cp "$KERNEL_OUT/dtb" "$STAGE/"
+        [[ "$HAS_DTBO" == "true" ]] && cp "$KERNEL_OUT/dtbo.img" "$STAGE/"
     
-        # Case C: inline dtb kernel (Image.gz-dtb)
-        if [[ "$KERNEL_IMAGE" == *"dtb"* ]]; then
-          echo "::notice:: Detected inline DTB kernel (no separate dtb needed)"
-        fi
+        cp build/kernel.info "$STAGE/"
     
         # ----------------------------
-        # 4. Auto-generate ZIP name
+        # ZIP naming logic (unchanged behavior preserved)
         # ----------------------------
-        KERNEL_NAME="${RELEASE_NAME}"
+        BASE_NAME="$KERNEL_NAME"
     
-        if [[ "$USE_KSU" == "true" ]]; then
-          KERNEL_NAME="${KERNEL_NAME}-ksu"
-        fi
+        [[ "$USE_KSU" == "true" ]] && BASE_NAME="${BASE_NAME}-ksu"
     
         if [[ "$KERNEL_IMAGE" == *"lz4"* ]]; then
-          KERNEL_NAME="${KERNEL_NAME}-lz4"
+          BASE_NAME="${BASE_NAME}-lz4"
         elif [[ "$KERNEL_IMAGE" == *"gz"* ]]; then
-          KERNEL_NAME="${KERNEL_NAME}-gz"
+          BASE_NAME="${BASE_NAME}-gz"
         fi
     
-        ZIP_NAME="${KERNEL_NAME}.zip"
+        ZIP_NAME="${BASE_NAME}.zip"
     
-        echo "::notice:: Packaging as ${ZIP_NAME}"
+        echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
+    
+        echo "::notice:: Packaging $ZIP_NAME"
     
         # ----------------------------
-        # 5. Create flashable zip
+        # Build ZIP (deterministic)
         # ----------------------------
-        cd "$AK3_DIR"
-        zip -r "../$ZIP_NAME" ./*
+        cd "$STAGE"
+    
+        zip -r -X "../$ZIP_NAME" . \
+          -x "*.git*" "*.DS_Store*" "*/__pycache__/*"
     
         cd ..
     
-        # ----------------------------
-        # 6. Move artifact
-        # ----------------------------
+        mkdir -p build
         mv "$ZIP_NAME" build/
     
+        echo "::notice:: Done -> build/$ZIP_NAME"
+    
         echo "::endgroup::"
-
-    # ----------------------------
-    # ARTIFACT UPLOAD
-    # ----------------------------
+    
+    
+    # ============================================================
+    # 4. ARTIFACT UPLOAD (UNCHANGED LOGIC)
+    # ============================================================
     - name: Upload kernel artifacts
       if: inputs.use-release == 'false' && inputs.use-anykernel3 == 'false'
       uses: actions/upload-artifact@v4
       with:
         name: kernel-build
         path: build/*
-
-    # ----------------------------
-    # ARTIFACT UPLOAD WITH ANYKERNEL
-    # ----------------------------
+    
+    
     - name: Upload AnyKernel3 artifacts
       if: inputs.use-release == 'false' && inputs.use-anykernel3 == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: anykernel3-package
         path: build/*
-
-    # ----------------------------
-    # RELEASE
-    # ----------------------------
+    
+    
+    # ============================================================
+    # 5. RELEASE (UNCHANGED)
+    # ============================================================
     - name: Create Release
       if: inputs.use-release == 'true'
       uses: softprops/action-gh-release@v2

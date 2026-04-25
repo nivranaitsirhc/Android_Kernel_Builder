@@ -128,16 +128,16 @@ runs:
         echo "USE_CLANG=${{ inputs.use-clang }}" >> $GITHUB_ENV
         echo "USE_AOSP_CLANG=${{ inputs.use-aosp-clang }}" >> $GITHUB_ENV
         echo "AOSP_CLANG_BRANCH=${{ inputs.aosp-clang-branch }}" >> $GITHUB_ENV
-        echo "AOSP_CLANG_DEFAULT_BRANCH=main-kernel" >> $GITHUB_ENV
+        echo "AOSP_CLANG_DEFAULT_BRANCH=android10-d4-release" >> $GITHUB_ENV
         echo "AOSP_CLANG_VERSION=${{ inputs.aosp-clang-version }}" >> $GITHUB_ENV
-        echo "AOSP_CLANG_DEFAULT_VERSION=clang-r596125" >> $GITHUB_ENV
+        echo "AOSP_CLANG_DEFAULT_VERSION=clang-r353983d" >> $GITHUB_ENV
         echo "CUSTOM_CLANG_URL=${{ inputs.custom-clang-url }}" >> $GITHUB_ENV
         echo "CUSTOM_CLANG_BRANCH=${{ inputs.custom-clang-branch }}" >> $GITHUB_ENV
         
         # gcc
         echo "USE_AOSP_GCC=${{ inputs.use-aosp-gcc }}" >> $GITHUB_ENV
         echo "AOSP_GCC_BRANCH=${{ inputs.aosp-gcc-branch }}" >> $GITHUB_ENV
-        echo "AOSP_GCC_DEFAULT_BRANCH=android10-release" >> $GITHUB_ENV
+        echo "AOSP_GCC_DEFAULT_BRANCH=android10-d4-release" >> $GITHUB_ENV
         echo "CUSTOM_GCC64_URL=${{ inputs.custom-gcc64-url }}" >> $GITHUB_ENV
         echo "CUSTOM_GCC64_BRANCH=${{ inputs.custom-gcc64-branch }}" >> $GITHUB_ENV
         echo "CUSTOM_GCC32_URL=${{ inputs.custom-gcc32-url }}" >> $GITHUB_ENV

@@ -401,10 +401,10 @@ runs:
       if: inputs.use-ccache == 'true'
       uses: hendrikmuhs/ccache-action@v1.2
       with:
-        key: ccache-${{ runner.os }}-${{ inputs.device }}
+        key: ${{ runner.os }}-${{ inputs.defconfig }}
         restore-keys: |
-          ccache-${{ runner.os }}-${{ inputs.device }}-
-          ccache-${{ runner.os }}-
+          ${{ runner.os }}-${{ inputs.defconfig }}-
+          ${{ runner.os }}-
         max-size: 10G
         # This automatically sets CCACHE_DIR and handles the save/restore logic
         append-timestamp: true 

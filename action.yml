@@ -235,6 +235,49 @@ runs:
           # 6. Cleanup empty folders
           find "$target_dir" -mindepth 1 -type d -empty -not -path "$bin_dir*" -delete
         }
+        check_defconfig() {
+          local defconfig="$1"
+          local arch="$2"
+          local config_dir="arch/${arch}/configs"
+        
+          # Extract just the filename (e.g. PIXEL_defconfig)
+          local defconfig_name
+          defconfig_name="$(basename "$defconfig")"
+        
+          # Case 1: already exists in root configs dir
+          if [ -f "${config_dir}/${defconfig}" ]; then
+            echo "::notice:: Defconfig found at root: ${defconfig}"
+            echo "$input_defconfig"
+            return 0
+          fi
+        
+          # Case 2: nested path exists
+          if [ -f "${config_dir}/${defconfig}" ]; then
+            echo "::notice:: Found nested defconfig: ${defconfig}"
+            
+            echo "::notice:: Copying to ${config_dir}/${defconfig_name}"
+            cp "${config_dir}/${defconfig}" "${config_dir}/${defconfig_name}"
+        
+            echo "$defconfig_name"
+            return 0
+          fi
+        
+          # Case 3: maybe user passed only filename but it's nested somewhere
+          local found_path
+          found_path=$(find "${config_dir}" -type f -name "${defconfig_name}" | head -n 1)
+        
+          if [ -n "$found_path" ]; then
+            echo "::notice:: Found defconfig at: ${found_path}"
+            echo "::notice:: Copying to ${config_dir}/${defconfig_name}"
+            cp "$found_path" "${config_dir}/${defconfig_name}"
+        
+            echo "$defconfig_name"
+            return 0
+          fi
+        
+          echo "::error:: Defconfig not found: ${input_defconfig}"
+          return 1
+        }
         EOF
         chmod +x functions.sh
         echo "::endgroup::"
@@ -429,27 +472,32 @@ runs:
     - name: Build kernel
       shell: bash
       run: |
+        source "$GITHUB_WORKSPACE/functions.sh"
+        
         # 1. Silence the warning that breaks version detection
         export ANDROID_SILENT_DEPRECATION=true
         
-        # echo "::notice:: Configuring Kernel with $DEFCONFIG"
-        # # Configuration Phase
-        # make O=out ARCH="${ARCH}" "${DEFCONFIG}" \
-        #      CC="${CC}" CXX="${CXX}" \
-        #      CROSS_COMPILE="${CROSS_COMPILE}" \
-        #      CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" \
-        #      ${EXTENDED_BUILD_COMMANDS}
+        echo "::notice:: Checking config file ${DEFCONFIG}"
+        export DEFCONFIG=$(check_defconfig "${DEFCONFIG}" "${ARCH}" ) || exit 1
         
-        # # Auto-fill new config options to avoid hangs
-        # make O=out ARCH="${ARCH}" \
-        #      CC="${CC}" CXX="${CXX}" \
-        #      CROSS_COMPILE="${CROSS_COMPILE}" \
-        #      CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" \
-        #      ${EXTENDED_BUILD_COMMANDS} olddefconfig
+        echo "::notice:: Configuring Kernel with $DEFCONFIG"
+        # Configuration Phase
+        make O=out ARCH="${ARCH}" "${DEFCONFIG}" \
+             CC="${CC}" CXX="${CXX}" \
+             CROSS_COMPILE="${CROSS_COMPILE}" \
+             CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" \
+             ${EXTENDED_BUILD_COMMANDS}
+        
+        # Auto-fill new config options to avoid hangs
+        make O=out ARCH="${ARCH}" \
+             CC="${CC}" CXX="${CXX}" \
+             CROSS_COMPILE="${CROSS_COMPILE}" \
+             CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" \
+             ${EXTENDED_BUILD_COMMANDS} olddefconfig
         
         echo "::notice:: Starting Compilation"
         # Build Phase
-        make -j$(nproc --all) O=out ARCH="${ARCH}" "${DEFCONFIG}"  \
+        make -j$(nproc --all) O=out ARCH="${ARCH}" \
              CC="${CC}" CXX="${CXX}" \
              CROSS_COMPILE="${CROSS_COMPILE}" \
              CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" \

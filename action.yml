@@ -57,10 +57,16 @@ inputs:
   aosp-gcc-branch:
     default: ""
 
-  custom-gcc-url:
+  custom-gcc64-url:
     default: ""
   
-  custom-gcc-branch:
+  custom-gcc64-branch:
+    default: ""
+
+  custom-gcc32-url:
+    default: ""
+  
+  custom-gcc32-branch:
     default: ""
 
   use-ccache:
@@ -132,8 +138,10 @@ runs:
         echo "USE_AOSP_GCC=${{ inputs.use-aosp-gcc }}" >> $GITHUB_ENV
         echo "AOSP_GCC_BRANCH=${{ inputs.aosp-gcc-branch }}" >> $GITHUB_ENV
         echo "AOSP_GCC_DEFAULT_BRANCH=android10-release" >> $GITHUB_ENV
-        echo "CUSTOM_GCC_URL=${{ inputs.custom-gcc-url }}" >> $GITHUB_ENV
-        echo "CUSTOM_GCC_BRANCH=${{ inputs.custom-gcc-branch }}" >> $GITHUB_ENV
+        echo "CUSTOM_GCC64_URL=${{ inputs.custom-gcc64-url }}" >> $GITHUB_ENV
+        echo "CUSTOM_GCC64_BRANCH=${{ inputs.custom-gcc64-branch }}" >> $GITHUB_ENV
+        echo "CUSTOM_GCC32_URL=${{ inputs.custom-gcc32-url }}" >> $GITHUB_ENV
+        echo "CUSTOM_GCC32_BRANCH=${{ inputs.custom-gcc32-branch }}" >> $GITHUB_ENV
 
         # cache
         echo "USE_CCACHE=${{ inputs.use-ccache }}" >> $GITHUB_ENV
@@ -247,6 +255,7 @@ runs:
         echo "::group:: ⚙️ Setup GCC"
         if [[ $USE_AOSP_GCC == "true" ]]; then
           echo "::notice:: Using AOSP GCC"
+          
           if [[ -n "$AOSP_GCC_BRANCH" ]]; then
             echo "::notice:: Using AOSP GCC arm-linux-androideabi-4.9 with branch ${AOSP_GCC_BRANCH}"
             AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/${AOSP_GCC_BRANCH}.tar.gz"
@@ -257,14 +266,26 @@ runs:
             AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9"
             AOSP_GCC_BRANCH="${AOSP_GCC_DEFAULT_BRANCH}"
           fi
+          
           download_and_extract "$AOSP_GCC64_URL" "aosp-gcc-aarch64" "${PWD}/aosp-gcc-64" "$AOSP_GCC_BRANCH"
           download_and_extract "$AOSP_GCC32_URL" "aosp-gcc-arm" "${PWD}/aosp-gcc-32" "$AOSP_GCC_BRANCH"
           echo "${PWD}/aosp-gcc-64/bin" >> $GITHUB_PATH
           echo "${PWD}/aosp-gcc-32/bin" >> $GITHUB_PATH
+          
         else
-          echo "::notice:: Using Custom GCC URL"
-          download_and_extract "$CUSTOM_GCC_URL" "custom-gcc" "${PWD}/custom-gcc" "${CUSTOM_GCC_BRANCH:-main}"
-          echo "${PWD}/custom-gcc/bin" >> $GITHUB_PATH
+          echo "::notice:: Using Custom GCC"
+          
+          if [[ -n "$CUSTOM_GCC64_URL" && -n "$CUSTOM_GCC64_BRANCH" ]]; then
+            echo "::notice:: Using Custom GCC 64 URL - ${CUSTOM_GCC64_URL}"
+            download_and_extract "$CUSTOM_GCC64_URL" "custom-gcc-64" "${PWD}/custom-gcc" "${CUSTOM_GCC64_BRANCH:-main}"
+            echo "${PWD}/custom-gcc-64/bin" >> $GITHUB_PATH
+          fi
+          
+          if [[ -n "$CUSTOM_GCC32_URL" && -n "$CUSTOM_GCC32_BRANCH" ]]; then
+            echo "::notice:: Using Custom GCC 32 URL - ${CUSTOM_GCC32_URL}"
+            download_and_extract "$CUSTOM_GCC64_URL" "custom-gcc-32" "${PWD}/custom-gcc" "${CUSTOM_GCC32_BRANCH:-main}"
+            echo "${PWD}/custom-gcc-32/bin" >> $GITHUB_PATH
+          fi
         fi
 
         echo "::endgroup::"

@@ -245,7 +245,7 @@ runs:
         echo "CROSS_COMPILE_ARM32=arm-linux-androideabi-" >> $GITHUB_ENV
 
         echo "::group:: ⚙️ Setup GCC"
-        if [[ -z "${USE_AOSP_GCC}" ]]; then
+        if [[ $USE_AOSP_GCC == "true" ]]; then
           echo "::notice:: Using AOSP GCC"
           if [ -n "${AOSP_GCC_BRANCH}" ]; then
             echo "::notice:: Using AOSP GCC arm-linux-androideabi-4.9 with default branch ${AOSP_GCC_DEFAULT_BRANCH}"

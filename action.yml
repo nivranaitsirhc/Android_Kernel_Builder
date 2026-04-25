@@ -324,12 +324,10 @@ runs:
             AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/mirror-goog-main-llvm-toolchain-source/${AOSP_CLANG_DEFAULT_VERSION}.tar.gz"
           fi
           download_and_extract "$AOSP_CLANG_URL" "aosp-clang" "${PWD}/aosp-clang"
-          flatten_to_bin "${PWD}/aosp-clang"
           echo "${PWD}/aosp-clang/bin" >> $GITHUB_PATH
         else
           echo "::notice:: Using Custom Clang URL with ${CUSTOM_CLANG_BRANCH}"
           download_and_extract "${CUSTOM_CLANG_URL}" "custom-clang" "${PWD}/custom-clang" "${CUSTOM_CLANG_BRANCH}"
-          flatten_to_bin "${PWD}/custom-clang"
           echo "${PWD}/custom-clang/bin" >> $GITHUB_PATH
         fi
         echo "::endgroup::"
@@ -364,8 +362,6 @@ runs:
           
           download_and_extract "$AOSP_GCC64_URL" "aosp-gcc-aarch64" "${PWD}/aosp-gcc-64" "$AOSP_GCC_BRANCH"
           download_and_extract "$AOSP_GCC32_URL" "aosp-gcc-arm" "${PWD}/aosp-gcc-32" "$AOSP_GCC_BRANCH"
-          flatten_to_bin "${PWD}/aosp-gcc-64"
-          flatten_to_bin "${PWD}/aosp-gcc-32"
           echo "${PWD}/aosp-gcc-64/bin" >> $GITHUB_PATH
           echo "${PWD}/aosp-gcc-32/bin" >> $GITHUB_PATH
           

@@ -33,7 +33,10 @@ inputs:
   use-clang:
     default: "false"
 
-  aosp-clang-android-version:
+  use-aosp-clang:
+    default: "false"
+
+  aosp-clang-branch:
     default: ""
   
   aosp-clang-version:
@@ -48,6 +51,9 @@ inputs:
   use-gcc:
     default: "false"
 
+  use-aosp-gcc:
+    default: "false"
+    
   aosp-gcc-branch:
     default: ""
 
@@ -113,15 +119,18 @@ runs:
         echo "EXTENDED_BUILD_COMMANDS=${{ inputs.extended-build-commands }}" >> $GITHUB_ENV
         
         # clang
-        echo "USE_CLANG=${{ inputs.use-clang }}" >> $GITHUB_ENV
-        echo "AOSP_CLANG_ANDROID_VERSION=${{ inputs.aosp-clang-android-version }}" >> $GITHUB_ENV
+        echo "USE_AOSP_CLANG=${{ inputs.use-aosp-clang }}" >> $GITHUB_ENV
+        echo "AOSP_CLANG_BRANCH=${{ inputs.aosp-clang-branch }}" >> $GITHUB_ENV
+        echo "AOSP_CLANG_DEFAULT_BRANCH=main-kernel" >> $GITHUB_ENV
         echo "AOSP_CLANG_VERSION=${{ inputs.aosp-clang-version }}" >> $GITHUB_ENV
+        echo "AOSP_CLANG_DEFAULT_VERSION=clang-r596125" >> $GITHUB_ENV
         echo "CUSTOM_CLANG_URL=${{ inputs.custom-clang-url }}" >> $GITHUB_ENV
         echo "CUSTOM_CLANG_BRANCH=${{ inputs.custom-clang-branch }}" >> $GITHUB_ENV
         
         # gcc
-        echo "USE_GCC=${{ inputs.use-gcc }}" >> $GITHUB_ENV
+        echo "USE_AOSP_GCC=${{ inputs.use-aosp-gcc }}" >> $GITHUB_ENV
         echo "AOSP_GCC_BRANCH=${{ inputs.aosp-gcc-branch }}" >> $GITHUB_ENV
+        echo "AOSP_GCC_DEFAULT_BRANCH=android10-release" >> $GITHUB_ENV
         echo "CUSTOM_GCC_URL=${{ inputs.custom-gcc-url }}" >> $GITHUB_ENV
         echo "CUSTOM_GCC_BRANCH=${{ inputs.custom-gcc-branch }}" >> $GITHUB_ENV
 
@@ -203,17 +212,19 @@ runs:
         echo "CXX=clang++" >> $GITHUB_ENV
 
         echo "::group:: ⚙️ Setup CLANG"
-        if [[ -z "$CUSTOM_CLANG_URL" ]]; then
+        if [[ $USE_AOSP_CLANG == "true" ]]; then
           echo "::notice:: Using AOSP clang"
-          if [[ -n "$AOSP_CLANG_ANDROID_VERSION" ]]; then
-            AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android${AOSP_CLANG_ANDROID_VERSION}-release/clang-${AOSP_CLANG_VERSION}.tar.gz"
+          if [[ -n "$AOSP_CLANG_BRANCH" ]]; then
+            echo "::notice:: Using AOSP Clang branch ${AOSP_CLANG_BRANCH}" version ${AOSP_CLANG_VERSION}"
+            AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/${AOSP_CLANG_BRANCH}/${AOSP_CLANG_VERSION}.tar.gz"
           else
-            AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/mirror-goog-main-llvm-toolchain-source/clang-${AOSP_CLANG_VERSION}.tar.gz"
+            echo "::notice:: Using Default AOSP Clang branch with ${AOSP_CLANG_DEFAULT_VERION}"
+            AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/mirror-goog-main-llvm-toolchain-source/${AOSP_CLANG_DEFAULT_VERION}.tar.gz"
           fi
           download_and_extract "$AOSP_CLANG_URL" "aosp-clang" "${PWD}/aosp-clang"
           echo "${PWD}/aosp-clang/bin" >> $GITHUB_PATH
         else
-          echo "::notice:: Using Custom Clang URL"
+          echo "::notice:: Using Custom Clang URL with ${CUSTOM_CLANG_BRANCH}"
           download_and_extract "${CUSTOM_CLANG_URL}" "custom-clang" "${PWD}/custom-clang" "${CUSTOM_CLANG_BRANCH}"
           echo "${PWD}/custom-clang/bin" >> $GITHUB_PATH
         fi
@@ -233,14 +244,17 @@ runs:
         echo "CROSS_COMPILE_ARM32=arm-linux-androideabi-" >> $GITHUB_ENV
 
         echo "::group:: ⚙️ Setup GCC"
-        if [[ -z "${CUSTOM_GCC_URL}" ]]; then
-          echo "::notice:: Downloading AOSP GCC."
+        if [[ -z "${USE_AOSP_GCC}" ]]; then
+          echo "::notice:: Using AOSP GCC"
           if [ -n "${AOSP_GCC_BRANCH}" ]; then
+            echo "::notice:: Using AOSP GCC arm-linux-androideabi-4.9 with default branch ${AOSP_GCC_DEFAULT_BRANCH}"
             AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9"
             AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9"
+            AOSP_GCC_BRANCH="${AOSP_GCC_DEFAULT_BRANCH}"
           else
-            AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz"
-            AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz"
+            echo "::notice:: Using AOSP GCC arm-linux-androideabi-4.9 with branch ${AOSP_GCC_BRANCH}"
+            AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/${AOSP_GCC_BRANCH}.tar.gz"
+            AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/${AOSP_GCC_BRANCH}.tar.gz"
           fi
           download_and_extract "$AOSP_GCC64_URL" "aosp-gcc-aarch64" "${PWD}/aosp-gcc-64" "$AOSP_GCC_BRANCH"
           download_and_extract "$AOSP_GCC32_URL" "aosp-gcc-arm" "${PWD}/aosp-gcc-32" "$AOSP_GCC_BRANCH"
@@ -253,8 +267,6 @@ runs:
         fi
 
         echo "::endgroup::"
-        #echo "$PATH"
-        #echo $(ls "${PWD}/aosp-gcc-64/bin")
 
     # ----------------------------
     # CCACHE
@@ -295,7 +307,6 @@ runs:
           "$KERNEL_URL" \
           target-kernel
 
-
     # ----------------------------
     # KERNELSU
     # ----------------------------
@@ -306,34 +317,34 @@ runs:
         set -euo pipefail
         cd target-kernel
         if [[ -z "$KSU_VERSION" ]]; then
+          echo "::notice:: Using ${KSU_URL_SETUP}"
           curl -fsSL "$KSU_URL_SETUP" | bash
         else
+          echo "::notice:: Using ${KSU_URL_SETUP} with ${KSU_VERSION}"
           curl -fsSL "$KSU_URL_SETUP" | bash -s "$KSU_VERSION"
         fi
 
-
-
         DEFCONFIG_PATH="arch/arm64/configs/${{ inputs.defconfig }}"
 
-        echo "[*] Enabling KernelSU in $DEFCONFIG_PATH"
-
+        echo "::notice:: Enabling KernelSU in ${DEFCONFIG_PATH}"
+        
         # Ensure file exists
         if [ ! -f "$DEFCONFIG_PATH" ]; then
-          echo "[!] Defconfig not found!"
+          echo "::error:: Defconfig not found!"
           exit 1
         fi
 
-        # Remove any existing KSU lines (avoid duplicates/conflicts)
+        echo "::notice:: Remove any existing KSU lines (avoid duplicates/conflicts)"
         sed -i '/CONFIG_KSU/d' "$DEFCONFIG_PATH"
 
-        # Append required config
+        echo "::notice:: Appending required config"
         echo "CONFIG_KSU=y" >> "$DEFCONFIG_PATH"
-
+        
         # Optional (safer for compatibility)
         grep -q "CONFIG_KPROBES" "$DEFCONFIG_PATH" || echo "CONFIG_KPROBES=y" >> "$DEFCONFIG_PATH"
         grep -q "CONFIG_HAVE_KPROBES" "$DEFCONFIG_PATH" || echo "CONFIG_HAVE_KPROBES=y" >> "$DEFCONFIG_PATH"
 
-        echo "[*] Done"
+        echo "Done"
 
     # ----------------------------
     # BUILD
@@ -344,10 +355,20 @@ runs:
         set -euo pipefail
         cd target-kernel
 
-        make $DEFCONFIG
-        
+        echo "::notice:: Updating .config from ${DEFCONFIG}"
+        make "${DEFCONFIG}"
+
+        echo "::notice:: Starting Kernel Build"
         # ARCH,CROSS_COMPILE,CROSS_COMPILE_ARM32,CLANG_TRIPLE is in $GITHUB_ENV
         make -j$(nproc --all) $DEFCONFIG $EXTENDED_BUILD_COMMANDS O=out
+
+    # ----------------------------
+    # CACHE Stats
+    # ----------------------------
+    - name: Show ccache stats
+      if: inputs.show-ccache-stats == 'true'
+      shell: bash
+      run: ccache -s
 
     # ----------------------------
     # PACKAGE OUTPUTS (UNIFIED)
@@ -356,12 +377,16 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-
         mkdir -p build
 
         KERNEL_OUT="target-kernel/out/arch/$ARCH/boot"
 
-        # Copy kernel image
+        if [ -z "$(find "${KERNEL_OUT}" -maxdepth 0 -empty)" ]; then
+          echo "::error:: Missing Kernel Image at ${KERNEL_OUT}!"
+          exit 1
+        fi
+
+        echo "::notice:: Copying kernel image"
         if ls $KERNEL_OUT/Image* 1> /dev/null 2>&1; then
           cp $KERNEL_OUT/Image* build/
         fi

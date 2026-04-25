@@ -475,6 +475,8 @@ runs:
         
         # Silence the warning that breaks version detection
         export ANDROID_SILENT_DEPRECATION=true
+        export LLVM=1
+        export LLVM_IAS=1
         
         echo "::notice:: Checking config file ${DEFCONFIG}"
         check_defconfig DEFCONFIG "${ARCH}" ||  exit

@@ -267,37 +267,6 @@ runs:
           sudo apt-get install -y gcc-aarch64-linux-gnu
           echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
         fi
-    # ----------------------------
-    # CLANG
-    # ----------------------------
-    - name: Clang
-      if: inputs.use-clang == 'true'
-      shell: bash
-      run: |
-        set -euo pipefail
-        source "$GITHUB_WORKSPACE/functions.sh"
-        
-        echo "CC=clang" >> $GITHUB_ENV
-        echo "CXX=clang++" >> $GITHUB_ENV
-
-        echo "::group:: ⚙️ Setup CLANG"
-        if [[ $USE_AOSP_CLANG == "true" ]]; then
-          echo "::notice:: Using AOSP clang"
-          if [[ -n "$AOSP_CLANG_BRANCH" ]]; then
-            echo "::notice:: Using AOSP Clang branch ${AOSP_CLANG_BRANCH} version ${AOSP_CLANG_VERSION}"
-            AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/${AOSP_CLANG_BRANCH}/${AOSP_CLANG_VERSION}.tar.gz"
-          else
-            echo "::notice:: Using Default AOSP Clang branch with ${AOSP_CLANG_DEFAULT_VERSION}"
-            AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/mirror-goog-main-llvm-toolchain-source/${AOSP_CLANG_DEFAULT_VERSION}.tar.gz"
-          fi
-          download_and_extract "$AOSP_CLANG_URL" "aosp-clang" "${PWD}/aosp-clang"
-          echo "${PWD}/aosp-clang/bin" >> $GITHUB_PATH
-        else
-          echo "::notice:: Using Custom Clang URL with ${CUSTOM_CLANG_BRANCH}"
-          download_and_extract "${CUSTOM_CLANG_URL}" "custom-clang" "${PWD}/custom-clang" "${CUSTOM_CLANG_BRANCH}"
-          echo "${PWD}/custom-clang/bin" >> $GITHUB_PATH
-        fi
-        echo "::endgroup::"
 
     # ----------------------------
     # GCC
@@ -329,6 +298,7 @@ runs:
           
           download_and_extract "$AOSP_GCC64_URL" "aosp-gcc-aarch64" "${PWD}/aosp-gcc-64" "$AOSP_GCC_BRANCH"
           download_and_extract "$AOSP_GCC32_URL" "aosp-gcc-arm" "${PWD}/aosp-gcc-32" "$AOSP_GCC_BRANCH"
+          
           echo "${PWD}/aosp-gcc-64/bin" >> $GITHUB_PATH
           echo "${PWD}/aosp-gcc-32/bin" >> $GITHUB_PATH
           
@@ -350,6 +320,38 @@ runs:
 
         echo "::endgroup::"
 
+    # ----------------------------
+    # CLANG
+    # ----------------------------
+    - name: Clang
+      if: inputs.use-clang == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        source "$GITHUB_WORKSPACE/functions.sh"
+        
+        echo "CC=clang" >> $GITHUB_ENV
+        echo "CXX=clang++" >> $GITHUB_ENV
+
+        echo "::group:: ⚙️ Setup CLANG"
+        if [[ $USE_AOSP_CLANG == "true" ]]; then
+          echo "::notice:: Using AOSP clang"
+          if [[ -n "$AOSP_CLANG_BRANCH" ]]; then
+            echo "::notice:: Using AOSP Clang branch ${AOSP_CLANG_BRANCH} version ${AOSP_CLANG_VERSION}"
+            AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/${AOSP_CLANG_BRANCH}/${AOSP_CLANG_VERSION}.tar.gz"
+          else
+            echo "::notice:: Using Default AOSP Clang branch with ${AOSP_CLANG_DEFAULT_VERSION}"
+            AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/mirror-goog-main-llvm-toolchain-source/${AOSP_CLANG_DEFAULT_VERSION}.tar.gz"
+          fi
+          download_and_extract "$AOSP_CLANG_URL" "aosp-clang" "${PWD}/aosp-clang"
+          echo "${PWD}/aosp-clang/bin" >> $GITHUB_PATH
+        else
+          echo "::notice:: Using Custom Clang URL with ${CUSTOM_CLANG_BRANCH}"
+          download_and_extract "${CUSTOM_CLANG_URL}" "custom-clang" "${PWD}/custom-clang" "${CUSTOM_CLANG_BRANCH}"
+          echo "${PWD}/custom-clang/bin" >> $GITHUB_PATH
+        fi
+        echo "::endgroup::"
+        
     # ----------------------------
     # SETUP CCACHE
     # ----------------------------
@@ -382,8 +384,6 @@ runs:
         echo "CXX=ccache clang++" >> $GITHUB_ENV
         echo "HOSTCC=ccache gcc" >> $GITHUB_ENV
         echo "HOSTCXX=ccache g++" >> $GITHUB_ENV
-        # Based on our previous discussion, you may want these too:
-        echo "CROSS_COMPILE=ccache aarch64-linux-android-" >> $GITHUB_ENV
 
     # ----------------------------
     # CLONE KERNEL

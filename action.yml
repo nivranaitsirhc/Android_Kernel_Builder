@@ -308,8 +308,8 @@ runs:
           
           if [[ -n "$AOSP_GCC_BRANCH" ]]; then
             echo "::notice:: Using AOSP GCC arm-linux-androideabi-4.9 with branch ${AOSP_GCC_BRANCH}"
-            AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/${AOSP_GCC_BRANCH}.tar.gz"
-            AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/${AOSP_GCC_BRANCH}.tar.gz"
+            AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/heads/${AOSP_GCC_BRANCH}.tar.gz"
+            AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/heads/${AOSP_GCC_BRANCH}.tar.gz"
           else
             echo "::notice:: Using AOSP GCC arm-linux-androideabi-4.9 with default branch ${AOSP_GCC_DEFAULT_BRANCH}"
             AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9"

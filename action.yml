@@ -216,7 +216,7 @@ runs:
         if [[ $USE_AOSP_CLANG == "true" ]]; then
           echo "::notice:: Using AOSP clang"
           if [[ -n "$AOSP_CLANG_BRANCH" ]]; then
-            echo "::notice:: Using AOSP Clang branch ${AOSP_CLANG_BRANCH}" version ${AOSP_CLANG_VERSION}"
+            echo "::notice:: Using AOSP Clang branch ${AOSP_CLANG_BRANCH} version ${AOSP_CLANG_VERSION}"
             AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/${AOSP_CLANG_BRANCH}/${AOSP_CLANG_VERSION}.tar.gz"
           else
             echo "::notice:: Using Default AOSP Clang branch with ${AOSP_CLANG_DEFAULT_VERION}"

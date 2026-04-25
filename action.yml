@@ -247,15 +247,15 @@ runs:
         echo "::group:: ⚙️ Setup GCC"
         if [[ $USE_AOSP_GCC == "true" ]]; then
           echo "::notice:: Using AOSP GCC"
-          if [ -n "${AOSP_GCC_BRANCH}" ]; then
+          if [[ -n "$AOSP_GCC_BRANCH" ]]; then
+            echo "::notice:: Using AOSP GCC arm-linux-androideabi-4.9 with branch ${AOSP_GCC_BRANCH}"
+            AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/${AOSP_GCC_BRANCH}.tar.gz"
+            AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/${AOSP_GCC_BRANCH}.tar.gz"
+          else
             echo "::notice:: Using AOSP GCC arm-linux-androideabi-4.9 with default branch ${AOSP_GCC_DEFAULT_BRANCH}"
             AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9"
             AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9"
             AOSP_GCC_BRANCH="${AOSP_GCC_DEFAULT_BRANCH}"
-          else
-            echo "::notice:: Using AOSP GCC arm-linux-androideabi-4.9 with branch ${AOSP_GCC_BRANCH}"
-            AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/${AOSP_GCC_BRANCH}.tar.gz"
-            AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/${AOSP_GCC_BRANCH}.tar.gz"
           fi
           download_and_extract "$AOSP_GCC64_URL" "aosp-gcc-aarch64" "${PWD}/aosp-gcc-64" "$AOSP_GCC_BRANCH"
           download_and_extract "$AOSP_GCC32_URL" "aosp-gcc-arm" "${PWD}/aosp-gcc-32" "$AOSP_GCC_BRANCH"

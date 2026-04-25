@@ -236,46 +236,47 @@ runs:
           find "$target_dir" -mindepth 1 -type d -empty -not -path "$bin_dir*" -delete
         }
         check_defconfig() {
-          local defconfig="$1"
+          local -n defconfig_ref="$1"   # <-- reference to caller variable
           local arch="$2"
           local config_dir="arch/${arch}/configs"
         
-          # Extract just the filename (e.g. PIXEL_defconfig)
+          # Extract filename
           local defconfig_name
-          defconfig_name="$(basename "$defconfig")"
+          defconfig_name="$(basename "$defconfig_ref")"
         
-          # Case 1: already exists in root configs dir
+          # Case 1: already in root
           if [ -f "${config_dir}/${defconfig_name}" ]; then
-            echo "::notice:: Defconfig found at root: ${defconfig}"
-            echo "$input_defconfig"
+            echo "::notice:: Defconfig found at root: ${defconfig_name}"
+            defconfig_ref="$defconfig_name"
             return 0
           fi
         
           # Case 2: nested path exists
-          if [ -f "${config_dir}/${defconfig}" ]; then
-            echo "::notice:: Found nested defconfig: ${defconfig}"
-            
+          if [ -f "${config_dir}/${defconfig_ref}" ]; then
+            echo "::notice:: Found nested defconfig: ${defconfig_ref}"
             echo "::notice:: Copying to ${config_dir}/${defconfig_name}"
-            cp "${config_dir}/${defconfig}" "${config_dir}/${defconfig_name}"
         
-            echo "$defconfig_name"
+            cp "${config_dir}/${defconfig_ref}" "${config_dir}/${defconfig_name}"
+        
+            defconfig_ref="$defconfig_name"
             return 0
           fi
         
-          # Case 3: maybe user passed only filename but it's nested somewhere
+          # Case 3: search for it
           local found_path
           found_path=$(find "${config_dir}" -type f -name "${defconfig_name}" | head -n 1)
         
           if [ -n "$found_path" ]; then
             echo "::notice:: Found defconfig at: ${found_path}"
             echo "::notice:: Copying to ${config_dir}/${defconfig_name}"
+        
             cp "$found_path" "${config_dir}/${defconfig_name}"
         
-            echo "$defconfig_name"
+            defconfig_ref="$defconfig_name"
             return 0
           fi
         
-          echo "::error:: Defconfig not found: ${input_defconfig}"
+          echo "::error:: Defconfig not found: ${defconfig_ref}"
           return 1
         }
         EOF
@@ -472,15 +473,15 @@ runs:
     - name: Build kernel
       shell: bash
       run: |
+        set -euo pipefail
         source "$GITHUB_WORKSPACE/functions.sh"
-
         cd target-kernel
         
-        # 1. Silence the warning that breaks version detection
+        # Silence the warning that breaks version detection
         export ANDROID_SILENT_DEPRECATION=true
         
         echo "::notice:: Checking config file ${DEFCONFIG}"
-        export DEFCONFIG=$(check_defconfig "${DEFCONFIG}" "${ARCH}" ) || exit 1
+        check_defconfig DEFCONFIG "${ARCH}" ||  exit
         
         echo "::notice:: Configuring Kernel with $DEFCONFIG"
         # Configuration Phase

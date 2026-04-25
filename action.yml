@@ -164,7 +164,7 @@ runs:
         echo "::group:: ⚙️ Saving Functions to functions.sh"
         cat << 'EOF' > functions.sh
         #!/usr/bin/env bash
-
+        
         # download and extract files supports zip,tar,gz,xz,bz2,git
         download_and_extract() {
           local url=$1
@@ -178,11 +178,13 @@ runs:
               unzip -q "${output_name}.zip" -d "$extract_dir"
               ;;
             *.tar.*|*.gz|*.xz|*.bz2)
-              aria2c -o "${output_name}.${url##*.}" "$url" #${url##*.} only suitable for bash
-              tar -C "$extract_dir" -xf "${output_name}.${url##*.}"
+              # Simpler extraction: tar -xf auto-detects compression format
+              aria2c -o "${output_name}_archive" "$url"
+              tar -C "$extract_dir" -xf "${output_name}_archive"
               ;;
             *)
-              git clone "$url" "$extract_dir" --depth=${CLONE_DEPTH} -b "$branch"
+              # Ensure CLONE_DEPTH has a fallback value if not set in env
+              git clone "$url" "$extract_dir" --depth="${CLONE_DEPTH:-1}" -b "$branch"
               ;;
           esac
         }
@@ -190,32 +192,31 @@ runs:
         flatten_to_bin() {
           local target_dir="$1"
           local bin_dir="$target_dir/bin"
-      
+        
           # 1. Setup & Validation
           if [[ ! -d "$target_dir" ]]; then
               echo "::error::Target directory '$target_dir' not found."
               return 1
           fi
           mkdir -p "$bin_dir"
-      
+        
           echo "::notice::Flattening executables into $bin_dir..."
-      
+        
           # 2. Find all executables (ignoring the new bin folder itself to avoid loops)
-          find "$target_dir" -not -path "$bin_dir*" -type f -executable -o -type l -executable | while read -r item; do
+          # -L handles symlinks properly during search
+          find -L "$target_dir" -not -path "$bin_dir*" -type f -executable | while read -r item; do
               local name=$(basename "$item")
               local dest="$bin_dir/$name"
-      
-              # 3. Negotiate Links
+        
+              # 3. Negotiate Links: Point to the filename in the same folder
+              # Since we are flattening everything, both link and target will live here.
               if [[ -L "$item" ]]; then
-                  local target=$(readlink "$item")
-                  # Create a new relative link in the bin folder
-                  # Note: This assumes the actual binary will also be moved to bin/
-                  ln -sf "$target" "$dest"
+                  ln -sf "$name" "$dest"
                   continue
               fi
-      
+        
               # 4. Negotiate Duplicates (Same name, different content)
-              if [[ -f "$dest" && ! -L "$dest" ]]; then
+              if [[ -f "$dest" ]]; then
                   if cmp -s "$item" "$dest"; then
                       # Files are identical, just delete the redundant copy
                       rm "$item"
@@ -226,12 +227,12 @@ runs:
                       dest="${dest}_alt"
                   fi
               fi
-      
+        
               # 5. Move the binary
               mv "$item" "$dest"
           done
-      
-          # 6. Cleanup empty folders (Optional)
+        
+          # 6. Cleanup empty folders
           find "$target_dir" -mindepth 1 -type d -empty -not -path "$bin_dir*" -delete
         }
         EOF
@@ -428,12 +429,31 @@ runs:
     - name: Build kernel
       shell: bash
       run: |
-        set -euo pipefail
-        cd target-kernel
-
-        echo "::notice:: Starting Kernel Build"
-        # ARCH,CROSS_COMPILE,CROSS_COMPILE_ARM32,CLANG_TRIPLE is in $GITHUB_ENV
-        make -j$(nproc --all) "${DEFCONFIG}" O=out $EXTENDED_BUILD_COMMANDS
+        # 1. Silence the warning that breaks version detection
+        export ANDROID_SILENT_DEPRECATION=true
+        
+        echo "::notice:: Configuring Kernel with $DEFCONFIG"
+        # Configuration Phase
+        make O=out ARCH="${ARCH}" "${DEFCONFIG}" \
+             CC="${CC}" CXX="${CXX}" \
+             CROSS_COMPILE="${CROSS_COMPILE}" \
+             CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" \
+             ${EXTENDED_BUILD_COMMANDS}
+        
+        # Auto-fill new config options to avoid hangs
+        make O=out ARCH="${ARCH}" \
+             CC="${CC}" CXX="${CXX}" \
+             CROSS_COMPILE="${CROSS_COMPILE}" \
+             CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" \
+             ${EXTENDED_BUILD_COMMANDS} olddefconfig
+        
+        echo "::notice:: Starting Compilation"
+        # Build Phase
+        make -j$(nproc --all) O=out ARCH="${ARCH}" \
+             CC="${CC}" CXX="${CXX}" \
+             CROSS_COMPILE="${CROSS_COMPILE}" \
+             CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" \
+             ${EXTENDED_BUILD_COMMANDS}
 
     # ----------------------------
     # CACHE Stats

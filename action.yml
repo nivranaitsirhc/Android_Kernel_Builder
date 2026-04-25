@@ -473,6 +473,8 @@ runs:
       shell: bash
       run: |
         source "$GITHUB_WORKSPACE/functions.sh"
+
+        cd target-kernel
         
         # 1. Silence the warning that breaks version detection
         export ANDROID_SILENT_DEPRECATION=true

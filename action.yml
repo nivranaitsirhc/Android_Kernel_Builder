@@ -478,15 +478,23 @@ runs:
         export LLVM=1
         export LLVM_IAS=1
 
-        echo "${PATH}
+        echo "::notice:: env PATH ${PATH}"
+        echo "::notice:: env CC ${CC}"
+        echo "::notice:: env CXX ${CXX}"
+        echo "::notice:: env CLANG_TRIPLE ${CLANG_TRIPLE}"
+        echo "::notice:: env CROSS_COMPILE ${CROSS_COMPILE}"
+        echo "::notice:: env CROSS_COMPILE_ARM32 ${CROSS_COMPILE_ARM32}"
         
-        echo "::notice:: Checking config file ${DEFCONFIG}"
+        echo "::notice:: checking clang version $($CC --version | head -n1)"
+        
+        echo "::notice:: Verifying config file ${DEFCONFIG}"
         check_defconfig DEFCONFIG "${ARCH}" ||  exit
         
         echo "::notice:: Configuring Kernel with $DEFCONFIG"
         # Configuration Phase
         make O=out ARCH="${ARCH}" "${DEFCONFIG}" \
              CC="${CC}" CXX="${CXX}" \
+             CLANG_TRIPLE="${CLANG_TRIPLE}" \
              CROSS_COMPILE="${CROSS_COMPILE}" \
              CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" \
              ${EXTENDED_BUILD_COMMANDS}
@@ -494,6 +502,7 @@ runs:
         # Auto-fill new config options to avoid hangs
         make O=out ARCH="${ARCH}" \
              CC="${CC}" CXX="${CXX}" \
+             CLANG_TRIPLE="${CLANG_TRIPLE}" \
              CROSS_COMPILE="${CROSS_COMPILE}" \
              CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" \
              ${EXTENDED_BUILD_COMMANDS} olddefconfig
@@ -502,6 +511,7 @@ runs:
         # Build Phase
         make -j$(nproc --all) O=out ARCH="${ARCH}" \
              CC="${CC}" CXX="${CXX}" \
+             CLANG_TRIPLE="${CLANG_TRIPLE}" \
              CROSS_COMPILE="${CROSS_COMPILE}" \
              CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" \
              ${EXTENDED_BUILD_COMMANDS}

@@ -245,7 +245,7 @@ runs:
           defconfig_name="$(basename "$defconfig")"
         
           # Case 1: already exists in root configs dir
-          if [ -f "${config_dir}/${defconfig}" ]; then
+          if [ -f "${config_dir}/${defconfig_name}" ]; then
             echo "::notice:: Defconfig found at root: ${defconfig}"
             echo "$input_defconfig"
             return 0

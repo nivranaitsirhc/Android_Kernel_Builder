@@ -238,17 +238,6 @@ runs:
         chmod +x functions.sh
         echo "::endgroup::"
 
-    # ----------------------------
-    # RESTORE CCACHE
-    # ----------------------------
-    - name: Restore ccache
-      if: inputs.use-ccache == 'true'
-      uses: actions/cache@v4
-      with:
-        path: ~/.ccache
-        key: ccache-${{ runner.os }}-${{ github.sha }}
-        restore-keys: |
-          ccache-${{ runner.os }}-
     
     # ----------------------------
     # DEPENDENCIES
@@ -351,39 +340,6 @@ runs:
           echo "${PWD}/custom-clang/bin" >> $GITHUB_PATH
         fi
         echo "::endgroup::"
-        
-    # ----------------------------
-    # SETUP CCACHE
-    # ----------------------------
-    - name: Setup ccache
-      if: inputs.use-ccache == 'true'
-      uses: hendrikmuhs/ccache-action@v1.2
-      with:
-        key: ${{ runner.os }}-kernel-build
-        max-size: 10G
-        # This automatically sets CCACHE_DIR and handles the save/restore logic
-        append-timestamp: true 
-
-
-    - name: Configure ccache Environment
-      if: inputs.use-ccache == 'true'
-      shell: bash
-      run: |
-        # These are your specific kernel-building tweaks
-        ccache -o compiler_check=content
-        ccache -o compression=true
-        ccache -o compression_level=6
-        ccache -o sloppiness=time_macros
-        ccache -z # Reset stats for this run
-
-        echo "CCACHE_NOHASHDIR=1" >> $GITHUB_ENV
-        echo "CCACHE_BASEDIR=${GITHUB_WORKSPACE}/${BUILD_DIR}" >> $GITHUB_ENV
-
-        # Export variables for the 'make' command
-        echo "CC=ccache clang" >> $GITHUB_ENV
-        echo "CXX=ccache clang++" >> $GITHUB_ENV
-        echo "HOSTCC=ccache gcc" >> $GITHUB_ENV
-        echo "HOSTCXX=ccache g++" >> $GITHUB_ENV
 
     # ----------------------------
     # CLONE KERNEL
@@ -437,6 +393,43 @@ runs:
         grep -q "CONFIG_HAVE_KPROBES" "$DEFCONFIG_PATH" || echo "CONFIG_HAVE_KPROBES=y" >> "$DEFCONFIG_PATH"
 
         echo "Done"
+        
+    # ----------------------------
+    # SETUP CCACHE
+    # ----------------------------
+    - name: Setup ccache
+      if: inputs.use-ccache == 'true'
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ccache-${{ runner.os }}-${{ inputs.device }}
+        restore-keys: |
+          ccache-${{ runner.os }}-${{ inputs.device }}-
+          ccache-${{ runner.os }}-
+        max-size: 10G
+        # This automatically sets CCACHE_DIR and handles the save/restore logic
+        append-timestamp: true 
+
+
+    - name: Configure ccache Environment
+      if: inputs.use-ccache == 'true'
+      shell: bash
+      run: |
+        # These are your specific kernel-building tweaks
+        ccache -o compiler_check=content
+        ccache -o compression=true
+        ccache -o compression_level=6
+        ccache -o sloppiness=time_macros
+        ccache -z # Reset stats for this run
+
+        echo "CCACHE_NOHASHDIR=1" >> $GITHUB_ENV
+        echo "CCACHE_BASEDIR=${GITHUB_WORKSPACE}" >> $GITHUB_ENV
+
+        # Export variables for the 'make' command
+        echo "CC=ccache clang" >> $GITHUB_ENV
+        echo "CXX=ccache clang++" >> $GITHUB_ENV
+        echo "HOSTCC=ccache gcc" >> $GITHUB_ENV
+        echo "HOSTCXX=ccache g++" >> $GITHUB_ENV
+
 
     # ----------------------------
     # BUILD

@@ -510,6 +510,8 @@ runs:
           # Kbuild-style version (same philosophy as kernel)
           if git -C "$KSU_DIR" describe --tags --dirty --always >/dev/null 2>&1; then
             KSU_VERSION=$(git -C "$KSU_DIR" describe --tags --dirty --always)
+            # Remove trailing -g<sha>
+            KSU_VERSION=$(echo "$KSU_VERSION" | sed -E 's/-g[0-9a-f]+$//')
           else
             KSU_VERSION="$KSU_SHORT_SHA"
           fi
@@ -535,9 +537,12 @@ runs:
         
         [[ -z "$KSU_VERSION" ]] && KSU_VERSION="unknown"
         [[ -z "$KSU_SHORT_SHA" ]] && KSU_SHORT_SHA="unknown"
-        
-        KSU_FULL="${KSU_VERSION}@${KSU_SHORT_SHA}"
-        
+
+        if [[ $KSU_VERSION == $KSU_SHORT_SHA ]];then
+          KSU_FULL="@${KSU_SHORT_SHA}"
+        else
+          KSU_FULL="${KSU_VERSION}@${KSU_SHORT_SHA}"
+        fi
         echo "::notice:: KernelSU: $KSU_FULL"
         
         {

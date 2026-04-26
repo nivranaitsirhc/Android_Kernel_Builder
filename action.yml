@@ -100,9 +100,6 @@ inputs:
 
   release-name:
     default: "KernelBuild"
-  
-  use-extended-release-name:
-    default: "false"
 
   access-token:
     required: false
@@ -112,9 +109,9 @@ runs:
 
   steps:
 
-    # ----------------------------
+    # ============================================================
     # INIT
-    # ----------------------------
+    # ============================================================
     - name: Init
       shell: bash
       run: |
@@ -168,7 +165,6 @@ runs:
         # release
         echo "USE_RELEASE=${{ inputs.use-release }}" >> $GITHUB_ENV
         echo "RELEASE_NAME=${{ inputs.release-name }}" >> $GITHUB_ENV
-        echo "USE_EXTENDED_RELEASE_NAME=${{ inputs.use-extended-release-name }}" >> $GITHUB_ENV
         echo "::endgroup::"
         
         echo "::group:: ⚙️ Saving Functions to functions.sh"
@@ -248,9 +244,9 @@ runs:
         echo "::endgroup::"
 
     
-    # ----------------------------
+    # ============================================================
     # DEPENDENCIES
-    # ----------------------------
+    # ============================================================
     - name: Install dependencies
       shell: bash
       run: |
@@ -263,9 +259,9 @@ runs:
           echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
         fi
 
-    # ----------------------------
+    # ============================================================
     # GCC
-    # ----------------------------
+    # ============================================================
     - name: GCC
       if: inputs.use-gcc == 'true'
       shell: bash
@@ -315,9 +311,9 @@ runs:
 
         echo "::endgroup::"
 
-    # ----------------------------
+    # ============================================================
     # CLANG
-    # ----------------------------
+    # ============================================================
     - name: Clang
       if: inputs.use-clang == 'true'
       shell: bash
@@ -347,65 +343,97 @@ runs:
         fi
         echo "::endgroup::"
 
-    # ----------------------------
-    # CLONE KERNEL
-    # ----------------------------
-    - name: Clone kernel
-      shell: bash
-      run: |
-        set -euo pipefail
+        # ============================================================
+        # CLONE KERNEL
+        # ============================================================
+        - name: Clone kernel
+          shell: bash
+          run: |
+            set -euo pipefail
         
-        git clone \
-          --depth=$CLONE_DEPTH \
-          -b "$KERNEL_BRANCH" \
-          "$KERNEL_URL" \
-          "${BUILD_DIR}"
-          
-        # get the kernel sha
-        if [[ ! -d "$BUILD_DIR/.git" ]]; then
-          echo "::error:: Kernel repo is not a git repository"
-          exit 1
-        fi
+            git clone \
+              --depth="$CLONE_DEPTH" \
+              -b "$KERNEL_BRANCH" \
+              "$KERNEL_URL" \
+              "$BUILD_DIR"
         
-        KERNEL_SHA=$(git -C "$BUILD_DIR" rev-parse HEAD)
-        KERNEL_SHORT_SHA=$(git -C "$BUILD_DIR" rev-parse --short HEAD)
+            # ============================================================
+            # Validate repo
+            # ============================================================
+            if [[ ! -d "$BUILD_DIR/.git" ]]; then
+              echo "::error:: Kernel repo is not a git repository"
+              exit 1
+            fi
         
-        echo "::notice:: Kernel SHA: $KERNEL_SHA"
+            # ============================================================
+            # Kernel SHA
+            # ============================================================
+            KERNEL_SHA=$(git -C "$BUILD_DIR" rev-parse HEAD)
+            KERNEL_SHORT_SHA=$(git -C "$BUILD_DIR" rev-parse --short HEAD)
         
-        {
-          echo "KERNEL_SHA=$KERNEL_SHA"
-          echo "KERNEL_SHORT_SHA=$KERNEL_SHORT_SHA"
-        } >> "$GITHUB_ENV"
+            echo "::notice:: Kernel SHA: $KERNEL_SHA"
         
-        # get kernel name
-        KERNEL_NAME_RESOLVED=""
-        DEFCONFIG_PATH="${BUILD_DIR}/arch/${ARCH}/configs/${DEFCONFIG}"
+            # ============================================================
+            # Kernel version (real kernel version)
+            # ============================================================
+            KERNEL_VERSION=$(make -sC "$BUILD_DIR" kernelversion)
         
-        # Try LOCALVERSION from defconfig
-        if [[ -f "$BUILD_DIR/$DEFCONFIG_PATH" ]]; then
-          KERNEL_NAME_RESOLVED=$(grep -oP 'CONFIG_LOCALVERSION="\K[^"]+' "${BUILD_DIR}/${DEFCONFIG_PATH}" || true)
-        fi
+            echo "::notice:: Kernel Version: $KERNEL_VERSION"
         
-        # Fallback: use repo name
-        if [[ -z "$KERNEL_NAME_RESOLVED" ]]; then
-          KERNEL_NAME_RESOLVED=$(basename "$(git -C "$BUILD_DIR" rev-parse --show-toplevel)")
-        fi
+            # ============================================================
+            # Resolve kernel name (NEW LOGIC)
+            # ============================================================
+            KERNEL_NAME_RESOLVED=""
         
-        # Final fallback
-        if [[ -z "$KERNEL_NAME_RESOLVED" ]]; then
-          KERNEL_NAME_RESOLVED="kernel"
-        fi
+            # ---- Case 1: DEFCONFIG → use filename
+            if [[ -n "${DEFCONFIG:-}" ]]; then
+              DEFCONFIG_BASENAME=$(basename "$DEFCONFIG")
+              DEFCONFIG_BASENAME="${DEFCONFIG_BASENAME%_defconfig}"
         
-        # Normalize (spaces → underscore)
-        KERNEL_NAME_RESOLVED="${KERNEL_NAME_RESOLVED// /_}"
+              if [[ -n "$DEFCONFIG_BASENAME" ]]; then
+                KERNEL_NAME_RESOLVED="$DEFCONFIG_BASENAME"
+              fi
+            fi
         
-        echo "::notice:: Kernel Name: $KERNEL_NAME_RESOLVED"
+            # ---- Case 2: fallback to branch name
+            if [[ -z "$KERNEL_NAME_RESOLVED" ]]; then
+              KERNEL_NAME_RESOLVED="$KERNEL_BRANCH"
         
-        echo "KERNEL_NAME_RESOLVED=$KERNEL_NAME_RESOLVED" >> "$GITHUB_ENV"
+              # Clean branch (remove common prefixes like refs/heads/)
+              KERNEL_NAME_RESOLVED="${KERNEL_NAME_RESOLVED##*/}"
+            fi
+        
+            # ---- Final fallback
+            if [[ -z "$KERNEL_NAME_RESOLVED" ]]; then
+              KERNEL_NAME_RESOLVED="kernel"
+            fi
+        
+            # ============================================================
+            # Normalize
+            # ============================================================
+            KERNEL_NAME_RESOLVED="${KERNEL_NAME_RESOLVED// /_}"
+        
+            # ============================================================
+            # Compose final name
+            # ============================================================
+            FINAL_KERNEL_NAME="${KERNEL_NAME_RESOLVED}@${KERNEL_VERSION}"
+        
+            echo "::notice:: Kernel Name: $FINAL_KERNEL_NAME"
+        
+            # ============================================================
+            # Export
+            # ============================================================
+            {
+              echo "KERNEL_SHA=$KERNEL_SHA"
+              echo "KERNEL_SHORT_SHA=$KERNEL_SHORT_SHA"
+              echo "KERNEL_VERSION=$KERNEL_VERSION"
+              echo "KERNEL_NAME_RESOLVED=$KERNEL_NAME_RESOLVED"
+              echo "FINAL_KERNEL_NAME=$FINAL_KERNEL_NAME"
+            } >> "$GITHUB_ENV"
 
-    # ----------------------------
+    # ============================================================
     # KERNELSU
-    # ----------------------------
+    # ============================================================
     - name: Setup KernelSU
       if: inputs.use-ksu == 'true'
       shell: bash
@@ -442,9 +470,9 @@ runs:
 
         echo "Done"
 
-        # -----------------------------------
-        # Determine KernelSU sha and version
-        # -----------------------------------
+        # ============================================================
+        # DETERMINE KernelSU SHA and VERSION
+        # ============================================================
         KSU_DIR=""
         
         # ---- Detect where KernelSU lives ----
@@ -462,27 +490,52 @@ runs:
         KSU_SHORT_SHA=""
         KSU_VERSION="unknown"
         
-        # ---- Case 1: Git repo available ----
+        KSU_DIR=""
+        
+        # ---- Detect KernelSU location ----
+        if [[ -d "$BUILD_DIR/drivers/kernelsu/.git" ]]; then
+          KSU_DIR="$BUILD_DIR/drivers/kernelsu"
+        elif [[ -d "$BUILD_DIR/KernelSU/.git" ]]; then
+          KSU_DIR="$BUILD_DIR/KernelSU"
+        fi
+        
+        # ============================================================
+        # CASE 1: KernelSU has git (preferred + correct)
+        # ============================================================
         if [[ -n "$KSU_DIR" ]]; then
+        
           KSU_SHA=$(git -C "$KSU_DIR" rev-parse HEAD)
           KSU_SHORT_SHA=$(git -C "$KSU_DIR" rev-parse --short HEAD)
         
-          # Try to extract version from source
-          if [[ -f "$KSU_DIR/kernel/ksu_version.c" ]]; then
-            KSU_VERSION=$(grep -oP 'KSU_VERSION\s*=\s*"\K[^"]+' "$KSU_DIR/kernel/ksu_version.c" || echo "unknown")
+          # Kbuild-style version (same philosophy as kernel)
+          if git -C "$KSU_DIR" describe --tags --dirty --always >/dev/null 2>&1; then
+            KSU_VERSION=$(git -C "$KSU_DIR" describe --tags --dirty --always)
+          else
+            KSU_VERSION="$KSU_SHORT_SHA"
           fi
         
-        # ---- Case 2: No git repo (merged into kernel) ----
-        elif [[ -f "$BUILD_DIR/drivers/kernelsu/kernel/ksu_version.c" ]]; then
-          KSU_VERSION=$(grep -oP 'KSU_VERSION\s*=\s*"\K[^"]+' \
-            "$BUILD_DIR/drivers/kernelsu/kernel/ksu_version.c" || echo "unknown")
+        # ============================================================
+        # CASE 2: Merged into kernel (no git metadata)
+        # ============================================================
+        elif [[ -d "$BUILD_DIR/drivers/kernelsu" ]]; then
         
-          # Fallback: tie it to kernel commit
+          echo "::warning:: KernelSU has no git metadata, using kernel commit as fallback"
+        
           KSU_SHA="$KERNEL_SHA"
           KSU_SHORT_SHA="$KERNEL_SHORT_SHA"
+          KSU_VERSION="embedded"
+        
         fi
         
-        # ---- Compose version@sha ----
+        # ============================================================
+        # Normalize + compose
+        # ============================================================
+        
+        KSU_VERSION="${KSU_VERSION// /_}"
+        
+        [[ -z "$KSU_VERSION" ]] && KSU_VERSION="unknown"
+        [[ -z "$KSU_SHORT_SHA" ]] && KSU_SHORT_SHA="unknown"
+        
         KSU_FULL="${KSU_VERSION}@${KSU_SHORT_SHA}"
         
         echo "::notice:: KernelSU: $KSU_FULL"
@@ -494,9 +547,9 @@ runs:
           echo "KSU_FULL=$KSU_FULL"
         } >> "$GITHUB_ENV"
 
-    # ----------------------------
+    # ============================================================
     # BUILD IDENTITY
-    # ----------------------------
+    # ============================================================
     - name: Compose build identity
       shell: bash
       run: |
@@ -512,9 +565,9 @@ runs:
     
         echo "::notice:: Build ID: $BASE"
     
-    # ----------------------------
+    # ============================================================
     # SETUP CCACHE
-    # ----------------------------
+    # ============================================================
     - name: Setup ccache
       if: inputs.use-ccache == 'true'
       uses: hendrikmuhs/ccache-action@v1
@@ -549,9 +602,9 @@ runs:
         echo "HOSTCXX=ccache g++" >> $GITHUB_ENV
 
 
-    # ----------------------------
+    # ============================================================
     # BUILD
-    # ----------------------------
+    # ============================================================
     - name: Build kernel
       shell: bash
       run: |
@@ -594,9 +647,9 @@ runs:
              CROSS_COMPILE="${CROSS_COMPILE}" \
              CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" 
 
-    # ----------------------------
+    # ============================================================
     # CACHE Stats
-    # ----------------------------
+    # ============================================================
     - name: Show ccache stats
       if: inputs.show-ccache-stats == 'true'
       shell: bash

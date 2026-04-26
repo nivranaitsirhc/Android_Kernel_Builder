@@ -667,11 +667,11 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-    
+        
         KERNEL_OUT="${BUILD_DIR}/out/arch/$ARCH/boot"
-    
+        
         echo "::notice:: Resolving kernel artifacts from $KERNEL_OUT"
-    
+        
         # Deterministic kernel resolution (priority ordered)
         mapfile -t CANDIDATES < <(find "$KERNEL_OUT" -maxdepth 1 -type f \( \
             -name "Image.gz-dtb" \
@@ -681,22 +681,22 @@ runs:
             -o -name "Image.lz4" \
             -o -name "Image" \
           \) | sort)
-    
+        
         if [[ ${#CANDIDATES[@]} -eq 0 ]]; then
           echo "::error:: Kernel image not found"
           ls -lah "$KERNEL_OUT" || true
           exit 1
         fi
-    
+        
         KERNEL_IMAGE="${CANDIDATES[0]}"
         echo "::notice:: Kernel image: $(basename "$KERNEL_IMAGE")"
-    
+        
         HAS_DTB=false
         HAS_DTBO=false
-    
+        
         [[ -f "$KERNEL_OUT/dtb" ]] && HAS_DTB=true
         [[ -f "$KERNEL_OUT/dtbo.img" ]] && HAS_DTBO=true
-    
+        
         {
           echo "KERNEL_IMAGE=$KERNEL_IMAGE"
           echo "KERNEL_OUT=$KERNEL_OUT"
@@ -714,17 +714,17 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-    
+        
         mkdir -p build
-    
+        
         echo "::notice:: Preparing normalized artifacts"
-    
+        
         # Normalize kernel naming (removes ambiguity everywhere)
         cp "$KERNEL_IMAGE" build/kernel
-    
+        
         [[ "$HAS_DTB" == "true" ]] && cp "$KERNEL_OUT/dtb" build/
         [[ "$HAS_DTBO" == "true" ]] && cp "$KERNEL_OUT/dtbo.img" build/
-    
+        
         cat > build/kernel.info <<EOF
         Kernel: $KERNEL_NAME
         Commit: $KERNEL_SHA
@@ -734,76 +734,76 @@ runs:
         DTBO: $HAS_DTBO
         BUILD ID: $BUILD_ID
         EOF
-    
+        
         echo "::notice:: Artifact layer ready"
     
     
-        # ============================================================
-        # 3A. ANYKERNEL3 PACKAGER (FIXED ROOT STRUCTURE)
-        # ============================================================
-        - name: Package AnyKernel3
-          if: inputs.use-anykernel3 == 'true'
-          shell: bash
-          run: |
-            set -euo pipefail
+    # ============================================================
+    # 3A. ANYKERNEL3 PACKAGER (FIXED ROOT STRUCTURE)
+    # ============================================================
+    - name: Package AnyKernel3
+      if: inputs.use-anykernel3 == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
         
-            echo "::group:: AnyKernel3 Packaging"
+        echo "::group:: AnyKernel3 Packaging"
         
-            AK3_DIR="ak3"
-            STAGE="stage"
-            rm -rf "$STAGE"
-            mkdir -p "$STAGE"
+        AK3_DIR="ak3"
+        STAGE="stage"
+        rm -rf "$STAGE"
+        mkdir -p "$STAGE"
         
-            # Clone source
-            if [[ -n "${{ inputs.anykernel3-url }}" ]]; then
-              git clone --depth=1 "${{ inputs.anykernel3-url }}" "$AK3_DIR"
-            else
-              git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git "$AK3_DIR"
+        # Clone source
+        if [[ -n "${{ inputs.anykernel3-url }}" ]]; then
+          git clone --depth=1 "${{ inputs.anykernel3-url }}" "$AK3_DIR"
+        else
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git "$AK3_DIR"
         
-              sed -i 's/do.devicecheck=1/do.devicecheck=0/' "$AK3_DIR/anykernel.sh"
-              sed -i 's/IS_SLOT_DEVICE=0;/IS_SLOT_DEVICE=auto;/' "$AK3_DIR/anykernel.sh"
-              sed -i 's|BLOCK=.*|BLOCK=auto;|' "$AK3_DIR/anykernel.sh"
-            fi
+          sed -i 's/do.devicecheck=1/do.devicecheck=0/' "$AK3_DIR/anykernel.sh"
+          sed -i 's/IS_SLOT_DEVICE=0;/IS_SLOT_DEVICE=auto;/' "$AK3_DIR/anykernel.sh"
+          sed -i 's|BLOCK=.*|BLOCK=auto;|' "$AK3_DIR/anykernel.sh"
+        fi
         
-            # ✅ Copy ONLY contents, not folder (flatten)
-            cp -r "$AK3_DIR/"* "$STAGE/"
+        # ✅ Copy ONLY contents, not folder (flatten)
+        cp -r "$AK3_DIR/"* "$STAGE/"
         
-            # Remove junk
-            rm -rf "$STAGE/.git" "$STAGE/.github" "$STAGE/README.md"
+        # Remove junk
+        rm -rf "$STAGE/.git" "$STAGE/.github" "$STAGE/README.md"
         
-            # Inject normalized artifacts at ROOT
-            mv build/kernel "$STAGE/"
-            mv build/kernel.info "$STAGE/"
-            [[ "$HAS_DTB" == "true" ]] && mv build/dtb "$STAGE/" || true
-            [[ "$HAS_DTBO" == "true" ]] && mv build/dtbo.img "$STAGE/" || true
+        # Inject normalized artifacts at ROOT
+        mv build/kernel "$STAGE/"
+        mv build/kernel.info "$STAGE/"
+        [[ "$HAS_DTB" == "true" ]] && mv build/dtb "$STAGE/" || true
+        [[ "$HAS_DTBO" == "true" ]] && mv build/dtbo.img "$STAGE/" || true
         
-            # Naming
-            # BASE_NAME="$KERNEL_NAME"
-            # [[ "$USE_KSU" == "true" ]] && BASE_NAME="${BASE_NAME}-ksu"
+        # Naming
+        # BASE_NAME="$KERNEL_NAME"
+        # [[ "$USE_KSU" == "true" ]] && BASE_NAME="${BASE_NAME}-ksu"
         
-            # if [[ "$KERNEL_IMAGE" == *lz4* ]]; then
-            #   BASE_NAME="${BASE_NAME}-lz4"
-            # elif [[ "$KERNEL_IMAGE" == *gz* ]]; then
-            #   BASE_NAME="${BASE_NAME}-gz"
-            # fi
+        # if [[ "$KERNEL_IMAGE" == *lz4* ]]; then
+        #   BASE_NAME="${BASE_NAME}-lz4"
+        # elif [[ "$KERNEL_IMAGE" == *gz* ]]; then
+        #   BASE_NAME="${BASE_NAME}-gz"
+        # fi
         
-            ZIP_NAME="${BUILD_ID}.zip"
+        ZIP_NAME="${BUILD_ID}.zip"
         
-            echo "::notice:: Packaging $ZIP_NAME"
+        echo "::notice:: Packaging $ZIP_NAME"
         
-            # ✅ CRITICAL: zip from inside STAGE so files are ROOT
-            (
-              cd "$STAGE"
-              zip -r -X "../$ZIP_NAME" . -x "*.git*" "*.DS_Store*"
-            )
+        # ✅ CRITICAL: zip from inside STAGE so files are ROOT
+        (
+          cd "$STAGE"
+          zip -r -X "../$ZIP_NAME" . -x "*.git*" "*.DS_Store*"
+        )
         
-            mv "$ZIP_NAME" build/
-
-            # show zip structure
-            unzip -l "build/$ZIP_NAME"
+        mv "$ZIP_NAME" build/
         
-            echo "::notice:: Done -> build/$ZIP_NAME"
-            echo "::endgroup::"
+        # show zip structure
+        unzip -l "build/$ZIP_NAME"
+        
+        echo "::notice:: Done -> build/$ZIP_NAME"
+        echo "::endgroup::"
     
     
     # ============================================================
@@ -815,21 +815,21 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-    
+        
         echo "::group:: Boot Image Repack"
-
+        
         # check if boot_img url
         if [[ -z $BOOTIMG_URL ]]: then
           echo "::warning:: Boot Image Url is missing, skipping boot image repack."
           exit 1
         fi
-    
+        
         WORKDIR="split"
         mkdir -p "$WORKDIR"
         cd "$WORKDIR"
-    
+        
         HOST_ARCH=$(dpkg --print-architecture)
-    
+        
         case "$HOST_ARCH" in
           arm*|aarch64)
             BIN_URL="https://github.com/topjohnwu/Magisk/releases/latest/download/magiskboot-arm64"
@@ -842,23 +842,23 @@ runs:
             exit 1
             ;;
         esac
-    
+        
         curl -L "$BIN_URL" -o magiskboot
         chmod +x magiskboot
-    
+        
         curl -L "$BOOTIMG_URL" -o boot.img
-    
+        
         ./magiskboot unpack boot.img
-    
+        
         # Replace kernel deterministically (NO wildcard guessing)
         rm -f kernel
         cp ../build/kernel kernel
-    
+        
         ./magiskboot repack boot.img
-    
+        
         mkdir -p ../build
         mv new-boot.img ../build/boot.img
-    
+        
         echo "::notice:: Done -> build/boot.img"
         echo "::endgroup::"
     

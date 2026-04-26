@@ -98,6 +98,9 @@ inputs:
   use-release:
     default: "false"
 
+  use-release-name:
+    default: "false"
+    
   release-name:
     default: "KernelBuild"
 
@@ -161,10 +164,7 @@ runs:
 
         # boot image repack
         echo "BOOTIMG_URL=${{ inputs.bootimg-url }}" >> $GITHUB_ENV
-
-        # release
-        echo "USE_RELEASE=${{ inputs.use-release }}" >> $GITHUB_ENV
-        echo "RELEASE_NAME=${{ inputs.release-name }}" >> $GITHUB_ENV
+        
         echo "::endgroup::"
         
         echo "::group:: ⚙️ Saving Functions to functions.sh"
@@ -416,7 +416,7 @@ runs:
         # ============================================================
         # Compose final name
         # ============================================================
-        FINAL_KERNEL_NAME="${KERNEL_NAME_RESOLVED}@${KERNEL_VERSION}"
+        FINAL_KERNEL_NAME="${KERNEL_NAME_RESOLVED}-${KERNEL_VERSION}"
         
         echo "::notice:: Kernel Name: $FINAL_KERNEL_NAME"
         
@@ -560,7 +560,7 @@ runs:
       run: |
         set -euo pipefail
     
-        BASE="${KERNEL_NAME_RESOLVED}-${KERNEL_SHORT_SHA}"
+        BASE="${FINAL_KERNEL_NAME}@${KERNEL_SHORT_SHA}"
     
         if [[ "${USE_KSU}" == "true" ]]; then
           BASE="${BASE}-ksu-${KSU_FULL}"
@@ -661,7 +661,7 @@ runs:
       run: ccache -s
 
     # ============================================================
-    # 1. KERNEL RESOLVER (SINGLE SOURCE OF TRUTH)
+    # KERNEL RESOLVER (SINGLE SOURCE OF TRUTH)
     # ============================================================
     - name: Resolve kernel artifacts
       shell: bash
@@ -702,13 +702,11 @@ runs:
           echo "KERNEL_OUT=$KERNEL_OUT"
           echo "HAS_DTB=$HAS_DTB"
           echo "HAS_DTBO=$HAS_DTBO"
-          echo "KERNEL_NAME=$RELEASE_NAME"
-          echo "USE_KSU=$USE_KSU"
         } >> "$GITHUB_ENV"
     
     
     # ============================================================
-    # 2. ARTIFACT NORMALIZATION (STRICT INTERFACE LAYER)
+    # ARTIFACT NORMALIZATION (STRICT INTERFACE LAYER)
     # ============================================================
     - name: Prepare artifacts
       shell: bash
@@ -739,7 +737,7 @@ runs:
     
     
     # ============================================================
-    # 3A. ANYKERNEL3 PACKAGER (FIXED ROOT STRUCTURE)
+    # ANYKERNEL3 PACKAGER (FIXED ROOT STRUCTURE)
     # ============================================================
     - name: Package AnyKernel3
       if: inputs.use-anykernel3 == 'true'
@@ -777,16 +775,6 @@ runs:
         [[ "$HAS_DTB" == "true" ]] && mv build/dtb "$STAGE/" || true
         [[ "$HAS_DTBO" == "true" ]] && mv build/dtbo.img "$STAGE/" || true
         
-        # Naming
-        # BASE_NAME="$KERNEL_NAME"
-        # [[ "$USE_KSU" == "true" ]] && BASE_NAME="${BASE_NAME}-ksu"
-        
-        # if [[ "$KERNEL_IMAGE" == *lz4* ]]; then
-        #   BASE_NAME="${BASE_NAME}-lz4"
-        # elif [[ "$KERNEL_IMAGE" == *gz* ]]; then
-        #   BASE_NAME="${BASE_NAME}-gz"
-        # fi
-        
         ZIP_NAME="${BUILD_ID}.zip"
         
         echo "::notice:: Packaging $ZIP_NAME"
@@ -807,7 +795,7 @@ runs:
     
     
     # ============================================================
-    # 3B. BOOT.IMG REPACK (UNIFIED + FIXED LOGIC)
+    # BOOT.IMG REPACK (UNIFIED + FIXED LOGIC)
     # ============================================================
     - name: Repack boot.img
       if: inputs.use-bootimg-repack == 'true' || inputs.use-anykernel3 != 'true'
@@ -864,25 +852,50 @@ runs:
     
     
     # ============================================================
-    # 4. ARTIFACT UPLOAD (UNCHANGED LOGIC)
+    # ARTIFACT UPLOAD (UNCHANGED LOGIC)
     # ============================================================
     - name: Upload kernel artifacts
       if: inputs.use-release == 'false'
       uses: actions/upload-artifact@v4
       with:
         name: kernel-build
-        path: build/*    
-    
+        path: build/* 
+
+        
     # ============================================================
-    # 5. RELEASE (UNCHANGED)
+    # RESOLVE RELEASE NAME
+    # ============================================================
+    - name: Resolve Release Name
+      if: inputs.use-release == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        
+        if [[ "${{ inputs.use-release-name }}" == "true" ]]; then
+          RELEASE_NAME="${{ inputs.release-name }}"
+        else
+          RELEASE_NAME="$FINAL_KERNEL_NAME"
+        
+          if [[ "$USE_KSU" == "true" ]]; then
+            RELEASE_NAME="${RELEASE_NAME}-KSU-${KSU_VERSION}"
+          fi
+        fi
+        
+        echo "::notice:: Release Name: $RELEASE_NAME"
+        
+        # Export for next steps
+        echo "RELEASE_NAME=$RELEASE_NAME" >> "$GITHUB_ENV"
+          
+    # ============================================================
+    # RELEASE (UNCHANGED)
     # ============================================================
     - name: Create Release
       if: inputs.use-release == 'true'
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v3
       env:
         GITHUB_TOKEN: ${{ inputs.access-token }}
       with:
-        name: ${{ env.BUILD_ID }}
+        name: ${{ env.RELEASE_NAME }}
         tag_name: ${{ env.BUILD_ID }}
         files: build/*
         make_latest: true

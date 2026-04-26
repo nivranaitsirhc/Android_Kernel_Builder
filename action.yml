@@ -249,9 +249,6 @@ runs:
         sudo apt-get update
         sudo apt-get install --no-install-recommends -y $INSTALL_COMMANDS
 
-        if [[ "$USE_CCACHE" == "true" ]]; then
-          sudo apt-get install -y ccache
-        fi
         if [[ "$USE_CLANG" == "true" ]]; then
           sudo apt-get install -y gcc-aarch64-linux-gnu
           echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
@@ -399,7 +396,7 @@ runs:
     # ----------------------------
     - name: Setup ccache
       if: inputs.use-ccache == 'true'
-      uses: hendrikmuhs/ccache-action@v1.2
+      uses: hendrikmuhs/ccache-action@v1
       with:
         key: ${{ runner.os }}-${{ inputs.defconfig }}
         restore-keys: |

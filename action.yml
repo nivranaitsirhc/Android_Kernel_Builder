@@ -505,39 +505,31 @@ runs:
     
         echo "::notice:: Resolving kernel artifacts from $KERNEL_OUT"
     
-        # ----------------------------
-        # Kernel image resolution (unchanged features preserved)
-        # ----------------------------
-        KERNEL_IMAGE=$(find "$KERNEL_OUT" -maxdepth 1 -type f \
-          \( \
-            -name "Image" \
-            -o -name "Image.gz" \
-            -o -name "Image.gz-dtb" \
-            -o -name "Image-dtb" \
-            -o -name "Image.lz4" \
+        # Deterministic kernel resolution (priority ordered)
+        mapfile -t CANDIDATES < <(find "$KERNEL_OUT" -maxdepth 1 -type f \( \
+            -name "Image.gz-dtb" \
             -o -name "Image.lz4-dtb" \
-          \) | head -n 1)
+            -o -name "Image-dtb" \
+            -o -name "Image.gz" \
+            -o -name "Image.lz4" \
+            -o -name "Image" \
+          \) | sort)
     
-        if [[ -z "$KERNEL_IMAGE" ]]; then
+        if [[ ${#CANDIDATES[@]} -eq 0 ]]; then
           echo "::error:: Kernel image not found"
           ls -lah "$KERNEL_OUT" || true
           exit 1
         fi
     
+        KERNEL_IMAGE="${CANDIDATES[0]}"
         echo "::notice:: Kernel image: $(basename "$KERNEL_IMAGE")"
     
-        # ----------------------------
-        # DTB / DTBO detection (preserved)
-        # ----------------------------
         HAS_DTB=false
         HAS_DTBO=false
     
         [[ -f "$KERNEL_OUT/dtb" ]] && HAS_DTB=true
         [[ -f "$KERNEL_OUT/dtbo.img" ]] && HAS_DTBO=true
     
-        # ----------------------------
-        # Export environment (single source of truth)
-        # ----------------------------
         {
           echo "KERNEL_IMAGE=$KERNEL_IMAGE"
           echo "KERNEL_OUT=$KERNEL_OUT"
@@ -549,7 +541,7 @@ runs:
     
     
     # ============================================================
-    # 2. ARTIFACT PREPARATION (NORMALIZED OUTPUT LAYER)
+    # 2. ARTIFACT NORMALIZATION (STRICT INTERFACE LAYER)
     # ============================================================
     - name: Prepare artifacts
       shell: bash
@@ -558,16 +550,14 @@ runs:
     
         mkdir -p build
     
-        echo "::notice:: Preparing standardized artifacts"
+        echo "::notice:: Preparing normalized artifacts"
     
-        # kernel
+        # Normalize kernel naming (removes ambiguity everywhere)
         cp "$KERNEL_IMAGE" build/kernel
     
-        # dtb/dtbo (unchanged behavior preserved)
         [[ "$HAS_DTB" == "true" ]] && cp "$KERNEL_OUT/dtb" build/
         [[ "$HAS_DTBO" == "true" ]] && cp "$KERNEL_OUT/dtbo.img" build/
     
-        # metadata (unchanged feature)
         cat > build/kernel.info <<EOF
         Kernel: $KERNEL_NAME
         Image: $(basename "$KERNEL_IMAGE")
@@ -580,7 +570,7 @@ runs:
     
     
     # ============================================================
-    # 3. ANYKERNEL3 PACKAGER (PURE CONSUMER LAYER)
+    # 3A. ANYKERNEL3 PACKAGER (CLEAN + DETERMINISTIC)
     # ============================================================
     - name: Package AnyKernel3
       if: inputs.use-anykernel3 == 'true'
@@ -588,69 +578,105 @@ runs:
       run: |
         set -euo pipefail
     
-        echo "::group:: AnyKernel3 Packaging (Architecture Mode)"
+        echo "::group:: AnyKernel3 Packaging"
     
-        AK3_DIR="anykernel3"
+        AK3_DIR="ak3"
         STAGE="stage"
-        STAGE_AK3="$STAGE/anykernel"
+        mkdir -p "$STAGE"
     
-        mkdir -p "$STAGE_AK3"
+        # Clone source (custom or default)
+        if [[ -n "${{ inputs.anykernel3-url }}" ]]; then
+          git clone --depth=1 "${{ inputs.anykernel3-url }}" "$AK3_DIR"
+        else
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git "$AK3_DIR"
     
-        # ----------------------------
-        # Clone minimal AnyKernel3
-        # ----------------------------
-        git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git "$AK3_DIR"
+          # Minimal safe patching (only necessary parts)
+          sed -i 's/do.devicecheck=1/do.devicecheck=0/' "$AK3_DIR/anykernel.sh"
+          sed -i 's/IS_SLOT_DEVICE=0;/IS_SLOT_DEVICE=auto;/' "$AK3_DIR/anykernel.sh"
+          sed -i 's|BLOCK=.*|BLOCK=auto;|' "$AK3_DIR/anykernel.sh"
+        fi
     
-        # ----------------------------
-        # Core whitelist (no deletion logic anymore)
-        # ----------------------------
-        cp "$AK3_DIR/anykernel.sh" "$STAGE_AK3/"
-        [[ -d "$AK3_DIR/tools" ]] && cp -r "$AK3_DIR/tools" "$STAGE_AK3/"
+        # Copy only required AK3 core
+        cp "$AK3_DIR/anykernel.sh" "$STAGE/"
+        [[ -d "$AK3_DIR/tools" ]] && cp -r "$AK3_DIR/tools" "$STAGE/"
     
-        # ========================================================
-        # USE PREPARED ARTIFACTS (NO FIND, NO REDETECTION)
-        # ========================================================
+        # Inject normalized artifacts (NO REDETECTION)
         cp build/kernel "$STAGE/"
-    
-        [[ "$HAS_DTB" == "true" ]] && cp "$KERNEL_OUT/dtb" "$STAGE/"
-        [[ "$HAS_DTBO" == "true" ]] && cp "$KERNEL_OUT/dtbo.img" "$STAGE/"
-    
         cp build/kernel.info "$STAGE/"
     
-        # ----------------------------
-        # ZIP naming logic (unchanged behavior preserved)
-        # ----------------------------
-        BASE_NAME="$KERNEL_NAME"
+        [[ "$HAS_DTB" == "true" ]] && cp build/dtb "$STAGE/" || true
+        [[ "$HAS_DTBO" == "true" ]] && cp build/dtbo.img "$STAGE/" || true
     
+        # Naming logic (preserved)
+        BASE_NAME="$KERNEL_NAME"
         [[ "$USE_KSU" == "true" ]] && BASE_NAME="${BASE_NAME}-ksu"
     
-        if [[ "$KERNEL_IMAGE" == *"lz4"* ]]; then
+        if [[ "$KERNEL_IMAGE" == *lz4* ]]; then
           BASE_NAME="${BASE_NAME}-lz4"
-        elif [[ "$KERNEL_IMAGE" == *"gz"* ]]; then
+        elif [[ "$KERNEL_IMAGE" == *gz* ]]; then
           BASE_NAME="${BASE_NAME}-gz"
         fi
     
         ZIP_NAME="${BASE_NAME}.zip"
-    
         echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
     
         echo "::notice:: Packaging $ZIP_NAME"
     
-        # ----------------------------
-        # Build ZIP (deterministic)
-        # ----------------------------
-        cd "$STAGE"
+        (cd "$STAGE" && zip -r -X "../$ZIP_NAME" . -x "*.git*" "*.DS_Store*")
     
-        zip -r -X "../$ZIP_NAME" . \
-          -x "*.git*" "*.DS_Store*" "*/__pycache__/*"
-    
-        cd ..
-    
-        mkdir -p build
         mv "$ZIP_NAME" build/
     
         echo "::notice:: Done -> build/$ZIP_NAME"
+        echo "::endgroup::"
     
+    
+    # ============================================================
+    # 3B. BOOT.IMG REPACK (UNIFIED + FIXED LOGIC)
+    # ============================================================
+    - name: Repack boot.img
+      if: inputs.use-anykernel3 != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+    
+        echo "::group:: Boot Image Repack"
+    
+        WORKDIR="split"
+        mkdir -p "$WORKDIR"
+        cd "$WORKDIR"
+    
+        HOST_ARCH=$(dpkg --print-architecture)
+    
+        case "$HOST_ARCH" in
+          arm*|aarch64)
+            BIN_URL="https://github.com/topjohnwu/Magisk/releases/latest/download/magiskboot-arm64"
+            ;;
+          x86*|amd64)
+            BIN_URL="https://github.com/topjohnwu/Magisk/releases/latest/download/magiskboot-x86_64"
+            ;;
+          *)
+            echo "::error:: Unsupported architecture"
+            exit 1
+            ;;
+        esac
+    
+        curl -L "$BIN_URL" -o magiskboot
+        chmod +x magiskboot
+    
+        curl -L "${{ inputs.bootimg-url }}" -o boot.img
+    
+        ./magiskboot unpack boot.img
+    
+        # Replace kernel deterministically (NO wildcard guessing)
+        rm -f kernel
+        cp ../build/kernel kernel
+    
+        ./magiskboot repack boot.img
+    
+        mkdir -p ../build
+        mv new-boot.img ../build/boot.img
+    
+        echo "::notice:: Done -> build/boot.img"
         echo "::endgroup::"
     
     

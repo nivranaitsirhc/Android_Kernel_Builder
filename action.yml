@@ -89,6 +89,12 @@ inputs:
   use-anykernel3:
     default: "false"
 
+  use-bootimg-repack:
+    default: "false"
+
+  bootimg-url:
+    default: ""
+
   use-release:
     default: "false"
 
@@ -155,6 +161,9 @@ runs:
         echo "USE_KSU=${{ inputs.use-ksu }}" >> $GITHUB_ENV
         echo "KSU_URL_SETUP=${{ inputs.ksu-url-setup }}" >> $GITHUB_ENV
         echo "KSU_VERSION=${{ inputs.ksu-version }}" >> $GITHUB_ENV
+
+        # boot image repack
+        echo "BOOTIMG_URL=${{ inputs.bootimg-url }}" >> $GITHUB_ENV
 
         # release
         echo "USE_RELEASE=${{ inputs.use-release }}" >> $GITHUB_ENV
@@ -345,12 +354,54 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-
+        
         git clone \
           --depth=$CLONE_DEPTH \
           -b "$KERNEL_BRANCH" \
           "$KERNEL_URL" \
           "${BUILD_DIR}"
+          
+        # get the kernel sha
+        if [[ ! -d "$BUILD_DIR/.git" ]]; then
+          echo "::error:: Kernel repo is not a git repository"
+          exit 1
+        fi
+        
+        KERNEL_SHA=$(git -C "$BUILD_DIR" rev-parse HEAD)
+        KERNEL_SHORT_SHA=$(git -C "$BUILD_DIR" rev-parse --short HEAD)
+        
+        echo "::notice:: Kernel SHA: $KERNEL_SHA"
+        
+        {
+          echo "KERNEL_SHA=$KERNEL_SHA"
+          echo "KERNEL_SHORT_SHA=$KERNEL_SHORT_SHA"
+        } >> "$GITHUB_ENV"
+        
+        # get kernel name
+        KERNEL_NAME_RESOLVED=""
+        DEFCONFIG_PATH="${BUILD_DIR}/arch/${ARCH}/configs/${DEFCONFIG}"
+        
+        # Try LOCALVERSION from defconfig
+        if [[ -f "$KERNEL_DIR/$DEFCONFIG_PATH" ]]; then
+          KERNEL_NAME_RESOLVED=$(grep -oP 'CONFIG_LOCALVERSION="\K[^"]+' "${BUILD_DIR}/${DEFCONFIG_PATH}" || true)
+        fi
+        
+        # Fallback: use repo name
+        if [[ -z "$KERNEL_NAME_RESOLVED" ]]; then
+          KERNEL_NAME_RESOLVED=$(basename "$(git -C "$BUILD_DIR" rev-parse --show-toplevel)")
+        fi
+        
+        # Final fallback
+        if [[ -z "$KERNEL_NAME_RESOLVED" ]]; then
+          KERNEL_NAME_RESOLVED="kernel"
+        fi
+        
+        # Normalize (spaces → underscore)
+        KERNEL_NAME_RESOLVED="${KERNEL_NAME_RESOLVED// /_}"
+        
+        echo "::notice:: Kernel Name: $KERNEL_NAME_RESOLVED"
+        
+        echo "KERNEL_NAME_RESOLVED=$KERNEL_NAME_RESOLVED" >> "$GITHUB_ENV"
 
     # ----------------------------
     # KERNELSU
@@ -390,7 +441,77 @@ runs:
         grep -q "CONFIG_HAVE_KPROBES" "$DEFCONFIG_PATH" || echo "CONFIG_HAVE_KPROBES=y" >> "$DEFCONFIG_PATH"
 
         echo "Done"
+
+        # -----------------------------------
+        # Determine KernelSU sha and version
+        # -----------------------------------
+        KSU_DIR=""
         
+        # ---- Detect where KernelSU lives ----
+        if [[ -d "$BUILD_DIR/drivers/kernelsu/.git" ]]; then
+          # KernelSU as submodule / nested repo
+          KSU_DIR="$BUILD_DIR/drivers/kernelsu"
+        elif [[ -d "$BUILD_DIR/KernelSU/.git" ]]; then
+          # Separate clone
+          KSU_DIR="$BUILD_DIR/KernelSU"
+        else
+          echo "::warning:: KernelSU repo not found, falling back to source parsing"
+        fi
+        
+        KSU_SHA=""
+        KSU_SHORT_SHA=""
+        KSU_VERSION="unknown"
+        
+        # ---- Case 1: Git repo available ----
+        if [[ -n "$KSU_DIR" ]]; then
+          KSU_SHA=$(git -C "$KSU_DIR" rev-parse HEAD)
+          KSU_SHORT_SHA=$(git -C "$KSU_DIR" rev-parse --short HEAD)
+        
+          # Try to extract version from source
+          if [[ -f "$KSU_DIR/kernel/ksu_version.c" ]]; then
+            KSU_VERSION=$(grep -oP 'KSU_VERSION\s*=\s*"\K[^"]+' "$KSU_DIR/kernel/ksu_version.c" || echo "unknown")
+          fi
+        
+        # ---- Case 2: No git repo (merged into kernel) ----
+        elif [[ -f "$BUILD_DIR/drivers/kernelsu/kernel/ksu_version.c" ]]; then
+          KSU_VERSION=$(grep -oP 'KSU_VERSION\s*=\s*"\K[^"]+' \
+            "$BUILD_DIR/drivers/kernelsu/kernel/ksu_version.c" || echo "unknown")
+        
+          # Fallback: tie it to kernel commit
+          KSU_SHA="$KERNEL_SHA"
+          KSU_SHORT_SHA="$KERNEL_SHORT_SHA"
+        fi
+        
+        # ---- Compose version@sha ----
+        KSU_FULL="${KSU_VERSION}@${KSU_SHORT_SHA}"
+        
+        echo "::notice:: KernelSU: $KSU_FULL"
+        
+        {
+          echo "KSU_VERSION=$KSU_VERSION"
+          echo "KSU_SHA=$KSU_SHA"
+          echo "KSU_SHORT_SHA=$KSU_SHORT_SHA"
+          echo "KSU_FULL=$KSU_FULL"
+        } >> "$GITHUB_ENV"
+
+    # ----------------------------
+    # BUILD IDENTITY
+    # ----------------------------
+    - name: Compose build identity
+      shell: bash
+      run: |
+        set -euo pipefail
+    
+        BASE="${KERNEL_NAME_RESOLVED}-${KERNEL_SHORT_SHA}"
+    
+        if [[ "${USE_KSU}" == "true" ]]; then
+          BASE="${BASE}-ksu-${KSU_FULL}"
+        fi
+    
+        echo "BUILD_ID=$BASE" >> "$GITHUB_ENV"
+    
+        echo "::notice:: Build ID: $BASE"
+    
     # ----------------------------
     # SETUP CCACHE
     # ----------------------------
@@ -398,9 +519,9 @@ runs:
       if: inputs.use-ccache == 'true'
       uses: hendrikmuhs/ccache-action@v1
       with:
-        key: ${{ runner.os }}-${{ inputs.defconfig }}
+        key: ${{ runner.os }}-${{ env.KERNEL_SHORT_SHA }}
         restore-keys: |
-          ${{ runner.os }}-${{ inputs.defconfig }}-
+          ${{ runner.os }}-${{ env.KERNEL_SHORT_SHA }}-
           ${{ runner.os }}-
         max-size: 10G
         # This automatically sets CCACHE_DIR and handles the save/restore logic
@@ -445,19 +566,7 @@ runs:
         export LLVM_IAS=1
         export KBUILD_BUILD_TIMESTAMP="1970-01-01 00:00:00"
 
-        # re-export all ENV vars in GITHUB_ENV to this shell
-        # export $(grep -v '^#' $GITHUB_ENV | xargs -d '\n')
-
-        # echo "::notice:: env PATH ${PATH}"
-        # echo "::notice:: env CC ${CC}"
-        # echo "::notice:: env CXX ${CXX}"
-        # echo "::notice:: env CLANG_TRIPLE ${CLANG_TRIPLE}"
-        # echo "::notice:: env CROSS_COMPILE ${CROSS_COMPILE}"
-        # echo "::notice:: env CROSS_COMPILE_ARM32 ${CROSS_COMPILE_ARM32}"
-        
-        # echo "::notice:: checking clang version $($CC --version | head -n1)"
-        
-        echo "::notice:: Verifying config file ${DEFCONFIG}"
+         # Verify config file ${DEFCONFIG}"
         check_defconfig DEFCONFIG "$ARCH"
         
         echo "::notice:: Configuring Kernel with $DEFCONFIG"
@@ -560,86 +669,102 @@ runs:
     
         cat > build/kernel.info <<EOF
         Kernel: $KERNEL_NAME
+        Commit: $KERNEL_SHA
         Image: $(basename "$KERNEL_IMAGE")
         KSU: $USE_KSU
         DTB: $HAS_DTB
         DTBO: $HAS_DTBO
+        BUILD ID: $BUILD_ID
         EOF
     
         echo "::notice:: Artifact layer ready"
     
     
-    # ============================================================
-    # 3A. ANYKERNEL3 PACKAGER (CLEAN + DETERMINISTIC)
-    # ============================================================
-    - name: Package AnyKernel3
-      if: inputs.use-anykernel3 == 'true'
-      shell: bash
-      run: |
-        set -euo pipefail
-    
-        echo "::group:: AnyKernel3 Packaging"
-    
-        AK3_DIR="ak3"
-        STAGE="stage"
-        mkdir -p "$STAGE"
-    
-        # Clone source (custom or default)
-        if [[ -n "${{ inputs.anykernel3-url }}" ]]; then
-          git clone --depth=1 "${{ inputs.anykernel3-url }}" "$AK3_DIR"
-        else
-          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git "$AK3_DIR"
-    
-          # Minimal safe patching (only necessary parts)
-          sed -i 's/do.devicecheck=1/do.devicecheck=0/' "$AK3_DIR/anykernel.sh"
-          sed -i 's/IS_SLOT_DEVICE=0;/IS_SLOT_DEVICE=auto;/' "$AK3_DIR/anykernel.sh"
-          sed -i 's|BLOCK=.*|BLOCK=auto;|' "$AK3_DIR/anykernel.sh"
-        fi
-    
-        # Copy only required AK3 core
-        cp "$AK3_DIR/anykernel.sh" "$STAGE/"
-        [[ -d "$AK3_DIR/tools" ]] && cp -r "$AK3_DIR/tools" "$STAGE/"
-    
-        # Inject normalized artifacts (NO REDETECTION)
-        cp build/kernel "$STAGE/"
-        cp build/kernel.info "$STAGE/"
-    
-        [[ "$HAS_DTB" == "true" ]] && cp build/dtb "$STAGE/" || true
-        [[ "$HAS_DTBO" == "true" ]] && cp build/dtbo.img "$STAGE/" || true
-    
-        # Naming logic (preserved)
-        BASE_NAME="$KERNEL_NAME"
-        [[ "$USE_KSU" == "true" ]] && BASE_NAME="${BASE_NAME}-ksu"
-    
-        if [[ "$KERNEL_IMAGE" == *lz4* ]]; then
-          BASE_NAME="${BASE_NAME}-lz4"
-        elif [[ "$KERNEL_IMAGE" == *gz* ]]; then
-          BASE_NAME="${BASE_NAME}-gz"
-        fi
-    
-        ZIP_NAME="${BASE_NAME}.zip"
-        echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
-    
-        echo "::notice:: Packaging $ZIP_NAME"
-    
-        (cd "$STAGE" && zip -r -X "../$ZIP_NAME" . -x "*.git*" "*.DS_Store*")
-    
-        mv "$ZIP_NAME" build/
-    
-        echo "::notice:: Done -> build/$ZIP_NAME"
-        echo "::endgroup::"
+        # ============================================================
+        # 3A. ANYKERNEL3 PACKAGER (FIXED ROOT STRUCTURE)
+        # ============================================================
+        - name: Package AnyKernel3
+          if: inputs.use-anykernel3 == 'true'
+          shell: bash
+          run: |
+            set -euo pipefail
+        
+            echo "::group:: AnyKernel3 Packaging"
+        
+            AK3_DIR="ak3"
+            STAGE="stage"
+            rm -rf "$STAGE"
+            mkdir -p "$STAGE"
+        
+            # Clone source
+            if [[ -n "${{ inputs.anykernel3-url }}" ]]; then
+              git clone --depth=1 "${{ inputs.anykernel3-url }}" "$AK3_DIR"
+            else
+              git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git "$AK3_DIR"
+        
+              sed -i 's/do.devicecheck=1/do.devicecheck=0/' "$AK3_DIR/anykernel.sh"
+              sed -i 's/IS_SLOT_DEVICE=0;/IS_SLOT_DEVICE=auto;/' "$AK3_DIR/anykernel.sh"
+              sed -i 's|BLOCK=.*|BLOCK=auto;|' "$AK3_DIR/anykernel.sh"
+            fi
+        
+            # ✅ Copy ONLY contents, not folder (flatten)
+            cp -r "$AK3_DIR/"* "$STAGE/"
+        
+            # Remove junk
+            rm -rf "$STAGE/.git" "$STAGE/.github" "$STAGE/README.md"
+        
+            # Inject normalized artifacts at ROOT
+            mv build/kernel "$STAGE/"
+            mv build/kernel.info "$STAGE/"
+            [[ "$HAS_DTB" == "true" ]] && mv build/dtb "$STAGE/" || true
+            [[ "$HAS_DTBO" == "true" ]] && mv build/dtbo.img "$STAGE/" || true
+        
+            # Naming
+            # BASE_NAME="$KERNEL_NAME"
+            # [[ "$USE_KSU" == "true" ]] && BASE_NAME="${BASE_NAME}-ksu"
+        
+            # if [[ "$KERNEL_IMAGE" == *lz4* ]]; then
+            #   BASE_NAME="${BASE_NAME}-lz4"
+            # elif [[ "$KERNEL_IMAGE" == *gz* ]]; then
+            #   BASE_NAME="${BASE_NAME}-gz"
+            # fi
+        
+            ZIP_NAME="${BUILD_ID}.zip"
+        
+            echo "::notice:: Packaging $ZIP_NAME"
+        
+            # ✅ CRITICAL: zip from inside STAGE so files are ROOT
+            (
+              cd "$STAGE"
+              zip -r -X "../$ZIP_NAME" . -x "*.git*" "*.DS_Store*"
+            )
+        
+            mv "$ZIP_NAME" build/
+
+            # show zip structure
+            unzip -l "build/$ZIP_NAME"
+        
+            echo "::notice:: Done -> build/$ZIP_NAME"
+            echo "::endgroup::"
     
     
     # ============================================================
     # 3B. BOOT.IMG REPACK (UNIFIED + FIXED LOGIC)
     # ============================================================
     - name: Repack boot.img
-      if: inputs.use-anykernel3 != 'true'
+      if: inputs.use-bootimg-repack == 'true' || inputs.use-anykernel3 != 'true'
+      continue-on-error: true
       shell: bash
       run: |
         set -euo pipefail
     
         echo "::group:: Boot Image Repack"
+
+        # check if boot_img url
+        if [[ -z $BOOTIMG_URL ]]: then
+          echo "::warning:: Boot Image Url is missing, skipping boot image repack."
+          exit 1
+        fi
     
         WORKDIR="split"
         mkdir -p "$WORKDIR"
@@ -663,7 +788,7 @@ runs:
         curl -L "$BIN_URL" -o magiskboot
         chmod +x magiskboot
     
-        curl -L "${{ inputs.bootimg-url }}" -o boot.img
+        curl -L "$BOOTIMG_URL" -o boot.img
     
         ./magiskboot unpack boot.img
     
@@ -684,20 +809,11 @@ runs:
     # 4. ARTIFACT UPLOAD (UNCHANGED LOGIC)
     # ============================================================
     - name: Upload kernel artifacts
-      if: inputs.use-release == 'false' && inputs.use-anykernel3 == 'false'
+      if: inputs.use-release == 'false'
       uses: actions/upload-artifact@v4
       with:
         name: kernel-build
-        path: build/*
-    
-    
-    - name: Upload AnyKernel3 artifacts
-      if: inputs.use-release == 'false' && inputs.use-anykernel3 == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: anykernel3-package
-        path: build/*
-    
+        path: build/*    
     
     # ============================================================
     # 5. RELEASE (UNCHANGED)
@@ -708,7 +824,7 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.access-token }}
       with:
-        name: ${{ inputs.release-name }}
-        tag_name: ${{ inputs.release-name }}-${{ github.sha }}
+        name: ${{ env.BUILD_ID }}
+        tag_name: ${{ env.BUILD_ID }}
         files: build/*
         make_latest: true

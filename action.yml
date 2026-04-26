@@ -343,93 +343,93 @@ runs:
         fi
         echo "::endgroup::"
 
+    # ============================================================
+    # CLONE KERNEL
+    # ============================================================
+    - name: Clone kernel
+      shell: bash
+      run: |
+        set -euo pipefail
+        
+        git clone \
+          --depth="$CLONE_DEPTH" \
+          -b "$KERNEL_BRANCH" \
+          "$KERNEL_URL" \
+          "$BUILD_DIR"
+        
         # ============================================================
-        # CLONE KERNEL
+        # Validate repo
         # ============================================================
-        - name: Clone kernel
-          shell: bash
-          run: |
-            set -euo pipefail
+        if [[ ! -d "$BUILD_DIR/.git" ]]; then
+          echo "::error:: Kernel repo is not a git repository"
+          exit 1
+        fi
         
-            git clone \
-              --depth="$CLONE_DEPTH" \
-              -b "$KERNEL_BRANCH" \
-              "$KERNEL_URL" \
-              "$BUILD_DIR"
+        # ============================================================
+        # Kernel SHA
+        # ============================================================
+        KERNEL_SHA=$(git -C "$BUILD_DIR" rev-parse HEAD)
+        KERNEL_SHORT_SHA=$(git -C "$BUILD_DIR" rev-parse --short HEAD)
         
-            # ============================================================
-            # Validate repo
-            # ============================================================
-            if [[ ! -d "$BUILD_DIR/.git" ]]; then
-              echo "::error:: Kernel repo is not a git repository"
-              exit 1
-            fi
+        echo "::notice:: Kernel SHA: $KERNEL_SHA"
         
-            # ============================================================
-            # Kernel SHA
-            # ============================================================
-            KERNEL_SHA=$(git -C "$BUILD_DIR" rev-parse HEAD)
-            KERNEL_SHORT_SHA=$(git -C "$BUILD_DIR" rev-parse --short HEAD)
+        # ============================================================
+        # Kernel version (real kernel version)
+        # ============================================================
+        KERNEL_VERSION=$(make -sC "$BUILD_DIR" kernelversion)
         
-            echo "::notice:: Kernel SHA: $KERNEL_SHA"
+        echo "::notice:: Kernel Version: $KERNEL_VERSION"
         
-            # ============================================================
-            # Kernel version (real kernel version)
-            # ============================================================
-            KERNEL_VERSION=$(make -sC "$BUILD_DIR" kernelversion)
+        # ============================================================
+        # Resolve kernel name (NEW LOGIC)
+        # ============================================================
+        KERNEL_NAME_RESOLVED=""
         
-            echo "::notice:: Kernel Version: $KERNEL_VERSION"
+        # ---- Case 1: DEFCONFIG → use filename
+        if [[ -n "${DEFCONFIG:-}" ]]; then
+          DEFCONFIG_BASENAME=$(basename "$DEFCONFIG")
+          DEFCONFIG_BASENAME="${DEFCONFIG_BASENAME%_defconfig}"
         
-            # ============================================================
-            # Resolve kernel name (NEW LOGIC)
-            # ============================================================
-            KERNEL_NAME_RESOLVED=""
+          if [[ -n "$DEFCONFIG_BASENAME" ]]; then
+            KERNEL_NAME_RESOLVED="$DEFCONFIG_BASENAME"
+          fi
+        fi
         
-            # ---- Case 1: DEFCONFIG → use filename
-            if [[ -n "${DEFCONFIG:-}" ]]; then
-              DEFCONFIG_BASENAME=$(basename "$DEFCONFIG")
-              DEFCONFIG_BASENAME="${DEFCONFIG_BASENAME%_defconfig}"
+        # ---- Case 2: fallback to branch name
+        if [[ -z "$KERNEL_NAME_RESOLVED" ]]; then
+          KERNEL_NAME_RESOLVED="$KERNEL_BRANCH"
         
-              if [[ -n "$DEFCONFIG_BASENAME" ]]; then
-                KERNEL_NAME_RESOLVED="$DEFCONFIG_BASENAME"
-              fi
-            fi
+          # Clean branch (remove common prefixes like refs/heads/)
+          KERNEL_NAME_RESOLVED="${KERNEL_NAME_RESOLVED##*/}"
+        fi
         
-            # ---- Case 2: fallback to branch name
-            if [[ -z "$KERNEL_NAME_RESOLVED" ]]; then
-              KERNEL_NAME_RESOLVED="$KERNEL_BRANCH"
+        # ---- Final fallback
+        if [[ -z "$KERNEL_NAME_RESOLVED" ]]; then
+          KERNEL_NAME_RESOLVED="kernel"
+        fi
         
-              # Clean branch (remove common prefixes like refs/heads/)
-              KERNEL_NAME_RESOLVED="${KERNEL_NAME_RESOLVED##*/}"
-            fi
+        # ============================================================
+        # Normalize
+        # ============================================================
+        KERNEL_NAME_RESOLVED="${KERNEL_NAME_RESOLVED// /_}"
         
-            # ---- Final fallback
-            if [[ -z "$KERNEL_NAME_RESOLVED" ]]; then
-              KERNEL_NAME_RESOLVED="kernel"
-            fi
+        # ============================================================
+        # Compose final name
+        # ============================================================
+        FINAL_KERNEL_NAME="${KERNEL_NAME_RESOLVED}@${KERNEL_VERSION}"
         
-            # ============================================================
-            # Normalize
-            # ============================================================
-            KERNEL_NAME_RESOLVED="${KERNEL_NAME_RESOLVED// /_}"
+        echo "::notice:: Kernel Name: $FINAL_KERNEL_NAME"
         
-            # ============================================================
-            # Compose final name
-            # ============================================================
-            FINAL_KERNEL_NAME="${KERNEL_NAME_RESOLVED}@${KERNEL_VERSION}"
-        
-            echo "::notice:: Kernel Name: $FINAL_KERNEL_NAME"
-        
-            # ============================================================
-            # Export
-            # ============================================================
-            {
-              echo "KERNEL_SHA=$KERNEL_SHA"
-              echo "KERNEL_SHORT_SHA=$KERNEL_SHORT_SHA"
-              echo "KERNEL_VERSION=$KERNEL_VERSION"
-              echo "KERNEL_NAME_RESOLVED=$KERNEL_NAME_RESOLVED"
-              echo "FINAL_KERNEL_NAME=$FINAL_KERNEL_NAME"
-            } >> "$GITHUB_ENV"
+        # ============================================================
+        # Export
+        # ============================================================
+        {
+          echo "KERNEL_SHA=$KERNEL_SHA"
+          echo "KERNEL_SHORT_SHA=$KERNEL_SHORT_SHA"
+          echo "KERNEL_VERSION=$KERNEL_VERSION"
+          echo "KERNEL_NAME_RESOLVED=$KERNEL_NAME_RESOLVED"
+          echo "FINAL_KERNEL_NAME=$FINAL_KERNEL_NAME"
+        } >> "$GITHUB_ENV"
 
     # ============================================================
     # KERNELSU
@@ -570,7 +570,7 @@ runs:
     # ============================================================
     - name: Setup ccache
       if: inputs.use-ccache == 'true'
-      uses: hendrikmuhs/ccache-action@v1
+      uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ runner.os }}-${{ env.KERNEL_SHORT_SHA }}
         restore-keys: |

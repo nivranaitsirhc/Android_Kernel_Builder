@@ -724,7 +724,7 @@ runs:
         [[ "$HAS_DTBO" == "true" ]] && cp "$KERNEL_OUT/dtbo.img" build/
         
         cat > build/kernel.info <<EOF
-        Kernel: $KERNEL_NAME
+        Kernel: $FINAL_KERNEL_NAME
         Commit: $KERNEL_SHA
         Image: $(basename "$KERNEL_IMAGE")
         KSU: $USE_KSU

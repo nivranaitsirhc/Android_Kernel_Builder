@@ -689,7 +689,8 @@ runs:
         fi
         
         KERNEL_IMAGE="${CANDIDATES[0]}"
-        echo "::notice:: Kernel image: $(basename "$KERNEL_IMAGE")"
+        KERNEL_IMAGE_FILENAME="$(basename $KERNEL_IMAGE)"
+        echo "::notice:: Kernel image: $KERNEL_IMAGE_FILENAME"
         
         HAS_DTB=false
         HAS_DTBO=false
@@ -700,6 +701,7 @@ runs:
         {
           echo "KERNEL_IMAGE=$KERNEL_IMAGE"
           echo "KERNEL_OUT=$KERNEL_OUT"
+          echo "KERNEL_IMAGE_FILENAME=$KERNEL_IMAGE_FILENAME"
           echo "HAS_DTB=$HAS_DTB"
           echo "HAS_DTBO=$HAS_DTBO"
         } >> "$GITHUB_ENV"
@@ -718,7 +720,7 @@ runs:
         echo "::notice:: Preparing normalized artifacts"
         
         # Copy Kernel
-        cp "$KERNEL_IMAGE" build/$(basename "$KERNEL_IMAGE")
+        cp "$KERNEL_IMAGE" "build/$KERNEL_IMAGE_FILENAME"
         
         [[ "$HAS_DTB" == "true" ]] && cp "$KERNEL_OUT/dtb" build/
         [[ "$HAS_DTBO" == "true" ]] && cp "$KERNEL_OUT/dtbo.img" build/
@@ -726,7 +728,7 @@ runs:
         cat > build/kernel.info <<EOF
         Kernel: $FINAL_KERNEL_NAME
         Commit: $KERNEL_SHA
-        Image: $(basename "$KERNEL_IMAGE")
+        Image: $KERNEL_IMAGE_FILENAME
         KSU: $USE_KSU
         DTB: $HAS_DTB
         DTBO: $HAS_DTBO
@@ -770,7 +772,7 @@ runs:
         rm -rf "$STAGE/.git" "$STAGE/.github" "$STAGE/README.md"
         
         # Inject normalized artifacts at ROOT
-        mv build/$(basename "${KERNEL_IMAGE}") "$STAGE/"
+        mv "build/$KERNEL_IMAGE_FILENAME" "$STAGE/"
         mv build/kernel.info "$STAGE/"
         [[ "$HAS_DTB" == "true" ]] && mv build/dtb "$STAGE/" || true
         [[ "$HAS_DTBO" == "true" ]] && mv build/dtbo.img "$STAGE/" || true
@@ -840,7 +842,7 @@ runs:
         
         # Replace kernel deterministically (NO wildcard guessing)
         rm -f kernel
-        cp ../build/$(basename "$KERNEL_IMAGE") kernel
+        cp "../build/$KERNEL_IMAGE_FILENAME" kernel
         
         ./magiskboot repack boot.img
         

@@ -637,7 +637,7 @@ runs:
              ${EXTENDED_BUILD_COMMANDS}
         
         # Auto-fill new config options to avoid hangs
-        make O=out ARCH="${ARCH}" \
+        make O=out ARCH="${ARCH}" olddefconfig \
              CC="${CC}" CXX="${CXX}" \
              CLANG_TRIPLE="${CLANG_TRIPLE}" \
              CROSS_COMPILE="${CROSS_COMPILE}" \

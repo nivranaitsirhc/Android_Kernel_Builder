@@ -770,7 +770,7 @@ runs:
         rm -rf "$STAGE/.git" "$STAGE/.github" "$STAGE/README.md"
         
         # Inject normalized artifacts at ROOT
-        mv build/${KERNEL_FNAME} "$STAGE/"
+        mv build/$(basename "${KERNEL_IMAGE}") "$STAGE/"
         mv build/kernel.info "$STAGE/"
         [[ "$HAS_DTB" == "true" ]] && mv build/dtb "$STAGE/" || true
         [[ "$HAS_DTBO" == "true" ]] && mv build/dtbo.img "$STAGE/" || true

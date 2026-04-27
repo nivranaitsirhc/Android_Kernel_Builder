@@ -770,7 +770,7 @@ runs:
         rm -rf "$STAGE/.git" "$STAGE/.github" "$STAGE/README.md"
         
         # Inject normalized artifacts at ROOT
-        mv build/kernel "$STAGE/"
+        mv build/${KERNEL_FNAME} "$STAGE/"
         mv build/kernel.info "$STAGE/"
         [[ "$HAS_DTB" == "true" ]] && mv build/dtb "$STAGE/" || true
         [[ "$HAS_DTBO" == "true" ]] && mv build/dtbo.img "$STAGE/" || true
@@ -840,11 +840,10 @@ runs:
         
         # Replace kernel deterministically (NO wildcard guessing)
         rm -f kernel
-        cp ../build/kernel kernel
+        cp ../build/$(basename "$KERNEL_IMAGE") kernel
         
         ./magiskboot repack boot.img
         
-        mkdir -p ../build
         mv new-boot.img ../build/boot.img
         
         echo "::notice:: Done -> build/boot.img"

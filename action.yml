@@ -629,20 +629,10 @@ runs:
         
         echo "::notice:: Configuring Kernel with $DEFCONFIG"
         # Configuration Phase
-        make O=out ARCH="${ARCH}" "${DEFCONFIG}" \
-             CC="${CC}" CXX="${CXX}" \
-             CLANG_TRIPLE="${CLANG_TRIPLE}" \
-             CROSS_COMPILE="${CROSS_COMPILE}" \
-             CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" \
-             ${EXTENDED_BUILD_COMMANDS}
+        make O=out ARCH="${ARCH}" "${DEFCONFIG}"
         
         # Auto-fill new config options to avoid hangs
-        make O=out ARCH="${ARCH}" olddefconfig \
-             CC="${CC}" CXX="${CXX}" \
-             CLANG_TRIPLE="${CLANG_TRIPLE}" \
-             CROSS_COMPILE="${CROSS_COMPILE}" \
-             CROSS_COMPILE_ARM32="${CROSS_COMPILE_ARM32}" \
-             ${EXTENDED_BUILD_COMMANDS}
+        make O=out ARCH="${ARCH}" olddefconfig 
         
         echo "::notice:: Starting Compilation"
         # Build Phase

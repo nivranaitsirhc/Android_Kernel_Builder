@@ -717,8 +717,8 @@ runs:
         
         echo "::notice:: Preparing normalized artifacts"
         
-        # Normalize kernel naming (removes ambiguity everywhere)
-        cp "$KERNEL_IMAGE" build/kernel
+        # Copy Kernel
+        cp "$KERNEL_IMAGE" build/$(basename "$KERNEL_IMAGE")
         
         [[ "$HAS_DTB" == "true" ]] && cp "$KERNEL_OUT/dtb" build/
         [[ "$HAS_DTBO" == "true" ]] && cp "$KERNEL_OUT/dtbo.img" build/

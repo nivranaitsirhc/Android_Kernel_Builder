@@ -195,6 +195,20 @@ runs:
           esac
         }
         
+        download_with_fallback() {
+          local primary_url="$1"
+          local fallback_url="$2"
+          local name="$3"
+          local dest="$4"
+        
+          echo "::notice:: Trying primary source..."
+          if download_and_extract "$primary_url" "$name" "$dest"; then
+            return 0
+          fi
+        
+          echo "::warning:: Primary failed, trying fallback source..."
+          download_and_extract "$fallback_url" "$name" "$dest"
+        }
         check_defconfig() {
           local -n defconfig_ref="$1"   # <-- reference to caller variable
           local arch="$2"
@@ -275,40 +289,50 @@ runs:
         echo "::group:: ⚙️ Setup GCC"
         if [[ $USE_AOSP_GCC == "true" ]]; then
           echo "::notice:: Using AOSP GCC"
-          
+        
           if [[ -n "$AOSP_GCC_BRANCH" ]]; then
             echo "::notice:: Using AOSP GCC arm-linux-androideabi-4.9 with branch ${AOSP_GCC_BRANCH}"
-            AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/heads/${AOSP_GCC_BRANCH}.tar.gz"
-            AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/heads/${AOSP_GCC_BRANCH}.tar.gz"
+        
+            AOSP_GCC64_PRIMARY="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/heads/${AOSP_GCC_BRANCH}.tar.gz"
+            AOSP_GCC64_FALLBACK="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/${AOSP_GCC_BRANCH}.tar.gz"
+        
+            AOSP_GCC32_PRIMARY="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/heads/${AOSP_GCC_BRANCH}.tar.gz"
+            AOSP_GCC32_FALLBACK="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/${AOSP_GCC_BRANCH}.tar.gz"
+        
           else
             echo "::notice:: Using AOSP GCC arm-linux-androideabi-4.9 with default branch ${AOSP_GCC_DEFAULT_BRANCH}"
-            AOSP_GCC64_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9"
-            AOSP_GCC32_URL="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9"
+        
+            AOSP_GCC64_PRIMARY="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/heads/${AOSP_GCC_DEFAULT_BRANCH}.tar.gz"
+            AOSP_GCC64_FALLBACK="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/${AOSP_GCC_DEFAULT_BRANCH}.tar.gz"
+        
+            AOSP_GCC32_PRIMARY="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/heads/${AOSP_GCC_DEFAULT_BRANCH}.tar.gz"
+            AOSP_GCC32_FALLBACK="https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/${AOSP_GCC_DEFAULT_BRANCH}.tar.gz"
+        
             AOSP_GCC_BRANCH="${AOSP_GCC_DEFAULT_BRANCH}"
           fi
-          
-          download_and_extract "$AOSP_GCC64_URL" "aosp-gcc-aarch64" "${PWD}/aosp-gcc-64" "$AOSP_GCC_BRANCH"
-          download_and_extract "$AOSP_GCC32_URL" "aosp-gcc-arm" "${PWD}/aosp-gcc-32" "$AOSP_GCC_BRANCH"
-          
-          echo "${PWD}/aosp-gcc-64/bin" >> $GITHUB_PATH
-          echo "${PWD}/aosp-gcc-32/bin" >> $GITHUB_PATH
-          
+        
+          download_with_fallback "$AOSP_GCC64_PRIMARY" "$AOSP_GCC64_FALLBACK" "aosp-gcc-aarch64" "${PWD}/aosp-gcc-64" "$AOSP_GCC_BRANCH"
+          download_with_fallback "$AOSP_GCC32_PRIMARY" "$AOSP_GCC32_FALLBACK" "aosp-gcc-arm" "${PWD}/aosp-gcc-32" "$AOSP_GCC_BRANCH"
+        
+          echo "${PWD}/aosp-gcc-64/bin" >> "$GITHUB_PATH"
+          echo "${PWD}/aosp-gcc-32/bin" >> "$GITHUB_PATH"
+        
         else
           echo "::notice:: Using Custom GCC"
-          
+        
           if [[ -n "$CUSTOM_GCC64_URL" && -n "$CUSTOM_GCC64_BRANCH" ]]; then
             echo "::notice:: Using Custom GCC 64 URL - ${CUSTOM_GCC64_URL}"
             download_and_extract "$CUSTOM_GCC64_URL" "custom-gcc-64" "${PWD}/custom-gcc-64" "${CUSTOM_GCC64_BRANCH:-main}"
-            echo "${PWD}/custom-gcc-64/bin" >> $GITHUB_PATH
+            echo "${PWD}/custom-gcc-64/bin" >> "$GITHUB_PATH"
           fi
-          
+        
           if [[ -n "$CUSTOM_GCC32_URL" && -n "$CUSTOM_GCC32_BRANCH" ]]; then
             echo "::notice:: Using Custom GCC 32 URL - ${CUSTOM_GCC32_URL}"
             download_and_extract "$CUSTOM_GCC32_URL" "custom-gcc-32" "${PWD}/custom-gcc-32" "${CUSTOM_GCC32_BRANCH:-main}"
-            echo "${PWD}/custom-gcc-32/bin" >> $GITHUB_PATH
+            echo "${PWD}/custom-gcc-32/bin" >> "$GITHUB_PATH"
           fi
         fi
-
+        
         echo "::endgroup::"
 
     # ============================================================
@@ -327,20 +351,30 @@ runs:
         echo "::group:: ⚙️ Setup CLANG"
         if [[ $USE_AOSP_CLANG == "true" ]]; then
           echo "::notice:: Using AOSP clang"
+        
+          BASE_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86"
+        
           if [[ -n "$AOSP_CLANG_BRANCH" ]]; then
             echo "::notice:: Using AOSP Clang branch ${AOSP_CLANG_BRANCH} version ${AOSP_CLANG_VERSION}"
-            AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/${AOSP_CLANG_BRANCH}/${AOSP_CLANG_VERSION}.tar.gz"
+        
+            PRIMARY_URL="${BASE_URL}/+archive/refs/heads/${AOSP_CLANG_BRANCH}/${AOSP_CLANG_VERSION}.tar.gz"
+            FALLBACK_URL="${BASE_URL}/+archive/refs/tags/${AOSP_CLANG_BRANCH}/${AOSP_CLANG_VERSION}.tar.gz"
           else
-            echo "::notice:: Using Default AOSP Clang branch with ${AOSP_CLANG_DEFAULT_VERSION}"
-            AOSP_CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/mirror-goog-main-llvm-toolchain-source/${AOSP_CLANG_DEFAULT_VERSION}.tar.gz"
+            echo "::notice:: Using Default AOSP Clang version ${AOSP_CLANG_DEFAULT_VERSION}"
+        
+            PRIMARY_URL="${BASE_URL}/+archive/refs/heads/mirror-goog-main-llvm-toolchain-source/${AOSP_CLANG_DEFAULT_VERSION}.tar.gz"
+            FALLBACK_URL="${BASE_URL}/+archive/refs/tags/mirror-goog-main-llvm-toolchain-source/${AOSP_CLANG_DEFAULT_VERSION}.tar.gz"
           fi
-          download_and_extract "$AOSP_CLANG_URL" "aosp-clang" "${PWD}/aosp-clang"
-          echo "${PWD}/aosp-clang/bin" >> $GITHUB_PATH
+        
+          download_with_fallback "$PRIMARY_URL" "$FALLBACK_URL" "aosp-clang" "${PWD}/aosp-clang"
+          echo "${PWD}/aosp-clang/bin" >> "$GITHUB_PATH"
+        
         else
           echo "::notice:: Using Custom Clang URL with ${CUSTOM_CLANG_BRANCH}"
           download_and_extract "${CUSTOM_CLANG_URL}" "custom-clang" "${PWD}/custom-clang" "${CUSTOM_CLANG_BRANCH}"
-          echo "${PWD}/custom-clang/bin" >> $GITHUB_PATH
+          echo "${PWD}/custom-clang/bin" >> "$GITHUB_PATH"
         fi
+        
         echo "::endgroup::"
 
     # ============================================================

@@ -697,6 +697,9 @@ runs:
         set -euo pipefail
         
         KERNEL_OUT="${BUILD_DIR}/out/arch/$ARCH/boot"
+
+        # Display files
+        find "$KERNEL_OUT" -maxdepth 1 -type f
         
         echo "::notice:: Resolving kernel artifacts from $KERNEL_OUT"
         

@@ -704,22 +704,28 @@ runs:
         echo "::notice:: Resolving kernel artifacts from $KERNEL_OUT"
         
         # Deterministic kernel resolution (priority ordered)
-        mapfile -t CANDIDATES < <(find "$KERNEL_OUT" -maxdepth 1 -type f \( \
-            -name "Image.gz-dtb" \
-            -o -name "Image.lz4-dtb" \
-            -o -name "Image-dtb" \
-            -o -name "Image.gz" \
-            -o -name "Image.lz4" \
-            -o -name "Image" \
-          \) | sort)
+        KERNEL_IMAGE=""
         
-        if [[ ${#CANDIDATES[@]} -eq 0 ]]; then
+        for img in \
+          Image.gz-dtb \
+          Image.lz4-dtb \
+          Image-dtb \
+          Image.gz \
+          Image.lz4 \
+          Image
+        do
+          if [[ -f "$KERNEL_OUT/$img" ]]; then
+            KERNEL_IMAGE="$KERNEL_OUT/$img"
+            break
+          fi
+        done
+        
+        if [[ -z "$KERNEL_IMAGE" ]]; then
           echo "::error:: Kernel image not found"
           ls -lah "$KERNEL_OUT" || true
           exit 1
         fi
         
-        KERNEL_IMAGE="${CANDIDATES[0]}"
         KERNEL_IMAGE_FILENAME="$(basename $KERNEL_IMAGE)"
         echo "::notice:: Kernel image: $KERNEL_IMAGE_FILENAME"
         
@@ -790,11 +796,12 @@ runs:
           git clone --depth=1 "${{ inputs.anykernel3-url }}" "$AK3_DIR"
         else
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git "$AK3_DIR"
-        
+        fi
+
+        # Update anykernel.sh
           sed -i 's/do.devicecheck=1/do.devicecheck=0/' "$AK3_DIR/anykernel.sh"
           sed -i 's/IS_SLOT_DEVICE=0;/IS_SLOT_DEVICE=auto;/' "$AK3_DIR/anykernel.sh"
           sed -i 's|BLOCK=.*|BLOCK=auto;|' "$AK3_DIR/anykernel.sh"
-        fi
         
         # ✅ Copy ONLY contents, not folder (flatten)
         cp -r "$AK3_DIR/"* "$STAGE/"
@@ -825,7 +832,6 @@ runs:
         
         echo "::notice:: Done -> build/$ZIP_NAME"
         echo "::endgroup::"
-    
     
     # ============================================================
     # BOOT.IMG REPACK (UNIFIED + FIXED LOGIC)

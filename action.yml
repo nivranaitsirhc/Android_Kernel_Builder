@@ -29,6 +29,9 @@ inputs:
   install-commands:
     default: binutils git make bc bison openssl curl zip kmod cpio flex libelf-dev libssl-dev libtfm-dev libc6-dev device-tree-compiler ca-certificates python3 xz-utils aria2 build-essential pigz coccinelle parallel
 
+  install-commands-extended:
+    default: ""
+
   extended-build-commands:
     default: ""
 
@@ -132,6 +135,7 @@ runs:
         echo "ARCH=${{ inputs.arch }}" >> $GITHUB_ENV
 
         echo "INSTALL_COMMANDS=${{ inputs.install-commands }}" >> $GITHUB_ENV
+        echo "INSTALL_COMMANDS_EXTENDED=${{ inputs.install-commands-extended }}" >> $GITHUB_ENV
         echo "EXTENDED_BUILD_COMMANDS=${{ inputs.extended-build-commands }}" >> $GITHUB_ENV
         
         # clang
@@ -266,7 +270,7 @@ runs:
       run: |
         set -euo pipefail
         sudo apt-get update
-        sudo apt-get install --no-install-recommends -y $INSTALL_COMMANDS
+        sudo apt-get install --no-install-recommends -y $INSTALL_COMMANDS $INSTALL_COMMANDS_EXTENDED
 
         if [[ "$USE_CLANG" == "true" ]]; then
           sudo apt-get install -y gcc-aarch64-linux-gnu
